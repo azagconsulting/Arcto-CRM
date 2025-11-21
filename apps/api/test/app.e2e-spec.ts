@@ -42,7 +42,7 @@ describe('AppController (e2e)', () => {
     const response = await request(server).get('/api/v1').expect(200);
 
     expect(response.body).toMatchObject({
-      name: 'fuhrpark-manager-api',
+      name: 'arcto-crm-api',
     });
   });
 });

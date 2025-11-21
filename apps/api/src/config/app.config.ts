@@ -3,7 +3,7 @@ import type { EnvConfig } from './env.validation';
 export const appConfig = () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   app: {
-    name: 'fuhrpark-manager-api',
+    name: 'arcto-crm-api',
     port: Number(process.env.PORT ?? 4000),
     url: process.env.API_URL ?? 'http://localhost:4000',
   },
@@ -12,11 +12,11 @@ export const appConfig = () => ({
   },
   auth: {
     jwt: {
-      secret: process.env.JWT_SECRET,
+      secret: process.env.JWT_SECRET as string,
       expiresIn: process.env.JWT_EXPIRES_IN ?? '15m',
     },
     refresh: {
-      secret: process.env.JWT_REFRESH_SECRET,
+      secret: process.env.JWT_REFRESH_SECRET as string,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
     },
   },

@@ -1,10 +1,21 @@
 "use client";
 
-import { LayoutDashboard, LifeBuoy, Settings, UserCog, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  LifeBuoy,
+  MessageSquare,
+  Newspaper,
+  Settings,
+  Sparkles,
+  UserCog,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -30,6 +41,24 @@ const navigation = [
     description: "People Ops, Kapazität und Hiring im Blick",
   },
   {
+    title: "Blog",
+    href: "/workspace/blog",
+    icon: Newspaper,
+    description: "Beiträge verfassen und veröffentlichen",
+  },
+  {
+    title: "Messages",
+    href: "/workspace/messages",
+    icon: MessageSquare,
+    description: "Inbox & E-Mails mit Kunden",
+  },
+  {
+    title: "Social Launch",
+    href: "/workspace/social",
+    icon: Sparkles,
+    description: "Automatisierte Beiträge mit OpenAI",
+  },
+  {
     title: "Einstellungen",
     href: "/settings",
     icon: Settings,
@@ -39,6 +68,15 @@ const navigation = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout, loading } = useAuth();
+  const displayName = user?.firstName ? `${user.firstName}` : user?.email;
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/");
+    }
+  }, [loading, router, user]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 lg:flex">
@@ -89,6 +127,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
                 <LifeBuoy className="h-4 w-4" /> Support
               </Button>
+              {user ? (
+                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-white">{displayName}</p>
+                    <p className="text-[11px] text-slate-400">{user.role.toLowerCase()}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-xs" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : null}
               <ThemeToggle />
             </div>
           </div>

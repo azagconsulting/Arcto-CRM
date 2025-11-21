@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
+import { json, urlencoded } from 'body-parser';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
@@ -19,6 +20,8 @@ async function bootstrap() {
   const configService = app.get<ConfigService<AppConfig, true>>(ConfigService);
   const reflector = app.get(Reflector);
 
+  app.use(json({ limit: '15mb' }));
+  app.use(urlencoded({ limit: '15mb', extended: true }));
   app.use(helmet());
   const frontendConfig = configService.get('frontend', { infer: true });
   app.enableCors({
@@ -51,7 +54,7 @@ async function bootstrap() {
 
   const url = await app.getUrl();
 
-  console.log(`🚗 Fuhrpark Manager API ready at ${url}`);
+  console.log(`🚀 Arcto CRM API ready at ${url}`);
 }
 
 void bootstrap();

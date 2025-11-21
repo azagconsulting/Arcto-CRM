@@ -7,7 +7,7 @@ import { AppService } from './app.service';
 const mockConfig = {
   nodeEnv: 'test',
   app: {
-    name: 'fuhrpark-manager-api',
+    name: 'arcto-crm-api',
     port: 4000,
     url: 'http://localhost:4000',
   },
@@ -45,7 +45,7 @@ describe('AppController', () => {
 
       expect(configGetMock).toHaveBeenCalledWith('app', { infer: true });
       expect(response).toMatchObject({
-        name: 'fuhrpark-manager-api',
+        name: 'arcto-crm-api',
         environment: 'test',
       });
     });

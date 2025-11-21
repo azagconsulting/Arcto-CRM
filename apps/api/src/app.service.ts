@@ -11,7 +11,7 @@ export class AppService {
     const app = this.configService.get('app', { infer: true });
 
     return {
-      name: app?.name ?? 'fuhrpark-manager-api',
+      name: app?.name ?? 'arcto-crm-api',
       version: process.env.npm_package_version ?? '0.0.1',
       environment: this.configService.get('nodeEnv', { infer: true }),
       url: app?.url ?? this.configService.get('API_URL'),

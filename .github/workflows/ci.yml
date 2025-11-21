@@ -34,7 +34,7 @@ jobs:
 
       - name: Build backend
         env:
-          DATABASE_URL: mysql://root:root@localhost:3306/fuhrpark_manager
+          DATABASE_URL: mysql://root:root@localhost:3306/arcto_crm
         run: npm run api:build
 
       - name: Build frontend

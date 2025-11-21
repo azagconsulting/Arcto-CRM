@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
+import { AuthProvider } from "@/components/auth-provider";
+import { NotificationProvider } from "@/components/notifications/notifications-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const fontSans = Plus_Jakarta_Sans({
@@ -30,7 +32,11 @@ export default function RootLayout({
   return (
     <html lang="de" suppressHydrationWarning>
       <body className={`${fontSans.variable} bg-slate-950 text-slate-100`}>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <NotificationProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </NotificationProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

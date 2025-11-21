@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Palette, ShieldCheck, Workflow } from "lucide-react";
 
+import { LandingAuthPanel } from "@/components/landing/auth-panel";
+import { ContactForm } from "@/components/landing/contact-form";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 
@@ -58,10 +60,13 @@ export default function Home() {
         <header className="flex flex-wrap items-center justify-between gap-4">
           <Logo />
           <div className="flex flex-wrap gap-3">
-            <Link href="/dashboard" className="text-sm text-slate-300">
-              Zum Dashboard
+            <Link href="/blog" className="text-sm text-slate-300 hover:text-white">
+              Blog
             </Link>
-            <Link href="mailto:hallo@arcto.app" className="inline-flex">
+            <Link href="#zugang" className="text-sm text-slate-300">
+              Login & Register
+            </Link>
+            <Link href="#kontakt" className="inline-flex">
               <Button variant="secondary" size="sm">
                 Kontakt aufnehmen
               </Button>
@@ -83,28 +88,33 @@ export default function Home() {
                 Wir haben Colio vollständig entfernt. Übrig bleiben Landingpage, Settings und der Designrahmen – bereit für deine CRM-Roadmap.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link href="/dashboard" className="inline-flex">
+                <Link href="#zugang" className="inline-flex">
                   <Button size="lg">
-                    Dashboard öffnen <ArrowRight className="h-4 w-4" />
+                    Login & Dashboard <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
-                <Link href="/settings" className="inline-flex">
+                <Link href="#kontakt" className="inline-flex">
                   <Button size="lg" variant="ghost">
-                    Einstellungen ansehen
+                    Kontakt aufnehmen
                   </Button>
                 </Link>
               </div>
             </div>
-            <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_25px_60px_rgba(15,23,42,0.45)]">
-              <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Status</p>
-              <p className="text-2xl font-semibold text-white">Prisma ready</p>
-              <p className="mt-2 text-sm text-slate-400">NestJS API + Prisma Schema sind angeschlossen. Frontend wartet auf erste Entitäten.</p>
-              <div className="mt-6 space-y-3">
-                {checklist.map((item) => (
-                  <p key={item} className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle2 className="h-4 w-4 text-sky-300" /> {item}
-                  </p>
-                ))}
+            <div className="space-y-6">
+              <LandingAuthPanel />
+              <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_25px_60px_rgba(15,23,42,0.45)]">
+                <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Status</p>
+                <p className="text-2xl font-semibold text-white">Prisma ready</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  NestJS API + Prisma Schema sind angeschlossen. Frontend wartet auf erste Entitäten.
+                </p>
+                <div className="mt-6 space-y-3">
+                  {checklist.map((item) => (
+                    <p key={item} className="flex items-center gap-2 text-sm text-slate-200">
+                      <CheckCircle2 className="h-4 w-4 text-sky-300" /> {item}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
@@ -121,16 +131,43 @@ export default function Home() {
             ))}
           </section>
 
+          <section
+            id="kontakt"
+            className="grid gap-10 rounded-[40px] border border-white/10 bg-gradient-to-br from-white/10 via-transparent to-white/5 p-8 lg:grid-cols-2"
+          >
+            <div className="space-y-4">
+              <p className="text-xs uppercase tracking-[0.4em] text-slate-300">Kontakt</p>
+              <p className="text-3xl font-semibold text-white">Formular direkt ins Dashboard</p>
+              <p className="text-sm text-slate-400">
+                Jede Nachricht legt automatisch einen Lead mit Priorität und Routing an. In den Einstellungen kannst du
+                Auto-Responder & Weiterleitung definieren.
+              </p>
+              <div className="space-y-3 text-sm text-slate-400">
+                <p>
+                  <span className="font-semibold text-white">Telefon & Co.</span> landen weiterhin per Mail – dieses
+                  Formular geht in die Pipeline.
+                </p>
+                <p>
+                  <span className="font-semibold text-white">Dashboard Einstellungen</span> erlauben dir,
+                  Auto-Zuweisung & Benachrichtigungen zu steuern.
+                </p>
+              </div>
+            </div>
+            <ContactForm />
+          </section>
+
           <section className="rounded-[40px] border border-white/10 bg-gradient-to-br from-white/10 via-transparent to-white/5 p-8">
             <div className="flex flex-col gap-6 text-center sm:text-left lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.4em] text-slate-300">Roadmap</p>
                 <p className="text-2xl font-semibold text-white">CRM-Funktionen folgen Schritt für Schritt</p>
-                <p className="text-sm text-slate-400">Starte mit einer sauberen Basis: Prisma-Datenmodell + Settings bestehen, alles andere ist leergezogen.</p>
+                <p className="text-sm text-slate-400">
+                  Starte mit einer sauberen Basis: Prisma-Datenmodell + Settings bestehen, alles andere ist leergezogen.
+                </p>
               </div>
-              <Link href="/dashboard" className="inline-flex">
+              <Link href="#zugang" className="inline-flex">
                 <Button size="lg" variant="secondary">
-                  Workspace öffnen
+                  Zugang sichern
                 </Button>
               </Link>
             </div>
