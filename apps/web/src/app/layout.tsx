@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de" suppressHydrationWarning>
-      <body className={`${fontSans.variable} bg-slate-950 text-slate-100`}>
+      <body className={`${fontSans.variable} antialiased`}>
         <ThemeProvider>
           <NotificationProvider>
             <AuthProvider>{children}</AuthProvider>

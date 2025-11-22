@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -62,10 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const tokensRef = useRef<AuthTokens | null>(null);
 
   const persistAuth = useCallback((payload: AuthResponse) => {
     setUser(payload.user);
     setTokens(payload.tokens);
+    tokensRef.current = payload.tokens;
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     }
@@ -74,10 +77,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     setTokens(null);
+    tokensRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  const handleAuthResponse = useCallback(
+    (payload: AuthResponse) => {
+      setError(null);
+      persistAuth(payload);
+    },
+    [persistAuth],
+  );
+
+  const refreshTokens = useCallback(async () => {
+    const refreshToken = tokensRef.current?.refreshToken;
+    if (!refreshToken) {
+      throw new Error("Kein Refresh Token gefunden");
+    }
+
+    const response = await apiRequest<AuthResponse>("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    handleAuthResponse(response);
+    return response.tokens.accessToken;
+  }, [handleAuthResponse]);
 
   const fetchProfile = useCallback(
     async (accessToken?: string) => {
@@ -86,19 +113,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      try {
+      const loadProfile = async (token: string) => {
         const profile = await apiRequest<AuthUser>("/auth/me", {
-          headers: authHeaders(accessToken),
+          headers: authHeaders(token),
         });
         setUser(profile);
+      };
+
+      try {
+        await loadProfile(accessToken);
       } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          try {
+            const nextAccessToken = await refreshTokens();
+            await loadProfile(nextAccessToken);
+            return;
+          } catch (refreshErr) {
+            console.error(refreshErr);
+          }
+        }
+
         console.error(err);
         logout();
       } finally {
         setLoading(false);
       }
     },
-    [logout],
+    [logout, refreshTokens],
   );
 
   useEffect(() => {
@@ -110,16 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(existing.user);
     setTokens(existing.tokens);
+    tokensRef.current = existing.tokens;
     void fetchProfile(existing.tokens.accessToken);
   }, [fetchProfile]);
-
-  const handleAuthResponse = useCallback(
-    (payload: AuthResponse) => {
-      setError(null);
-      persistAuth(payload);
-    },
-    [persistAuth],
-  );
 
   const login = useCallback(
     async (payload: LoginPayload) => {
@@ -156,20 +190,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [handleAuthResponse],
   );
-
-  const refreshTokens = useCallback(async () => {
-    if (!tokens?.refreshToken) {
-      throw new Error("Kein Refresh Token gefunden");
-    }
-
-    const response = await apiRequest<AuthResponse>("/auth/refresh", {
-      method: "POST",
-      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-    });
-
-    handleAuthResponse(response);
-    return response.tokens.accessToken;
-  }, [handleAuthResponse, tokens?.refreshToken]);
 
   const authorizedRequest = useCallback(
     async <T,>(path: string, init: RequestInit = {}): Promise<T> => {

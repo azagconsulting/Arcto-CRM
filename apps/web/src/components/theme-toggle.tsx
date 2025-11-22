@@ -22,6 +22,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="sm"
+      className="rounded-full border border-[var(--panel-border)] bg-[var(--badge-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
       aria-label="Designmodus wechseln"
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >

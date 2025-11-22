@@ -67,6 +67,15 @@ model User {
   firstName    String?    @db.VarChar(120)
   lastName     String?    @db.VarChar(120)
   avatarUrl    String?    @db.VarChar(512)
+  jobTitle     String?    @db.VarChar(191)
+  phone        String?    @db.VarChar(64)
+  location     String?    @db.VarChar(191)
+  headline     String?    @db.VarChar(191)
+  bio          String?    @db.Text
+  pronouns     String?    @db.VarChar(64)
+  linkedinUrl  String?    @db.VarChar(255)
+  twitterUrl   String?    @db.VarChar(255)
+  calendlyUrl  String?    @db.VarChar(255)
   role         UserRole   @default(COORDINATOR)
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
@@ -97,6 +106,7 @@ model Lead {
 
   assignedTo User?       @relation("LeadAssignee", fields: [assignedToId], references: [id])
   updates     LeadUpdate[]
+  messages    CustomerMessage[]
 
   @@index([status])
   @@index([assignedToId])
@@ -209,7 +219,8 @@ model CustomerActivity {
 
 model CustomerMessage {
   id          String                  @id @default(uuid())
-  customerId  String
+  customerId  String?
+  leadId      String?
   contactId   String?
   direction   CustomerMessageDirection
   status      CustomerMessageStatus    @default(SENT)
@@ -219,14 +230,26 @@ model CustomerMessage {
   fromEmail   String?                  @db.VarChar(191)
   toEmail     String?                  @db.VarChar(191)
   externalId  String?                  @db.VarChar(191)
+  attachments Json?
   sentAt      DateTime?
   receivedAt  DateTime?
+  readAt      DateTime?
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 
-  customer Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer?       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  lead     Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
   contact  CustomerContact? @relation(fields: [contactId], references: [id])
 
   @@index([customerId, createdAt])
   @@index([contactId])
+  @@index([leadId, createdAt])
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique @db.VarChar(191)
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

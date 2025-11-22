@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { appConfig } from './config/app.config';
@@ -14,6 +15,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { BlogModule } from './modules/blog/blog.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { UsersModule } from './modules/users/users.module';
+import { MailSyncModule } from './modules/mail-sync/mail-sync.module';
 
 @Module({
   imports: [
@@ -29,12 +33,16 @@ import { BlogModule } from './modules/blog/blog.module';
         limit: 120,
       },
     ]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     AuthModule,
     LeadsModule,
     CustomersModule,
     BlogModule,
+    SettingsModule,
+    UsersModule,
+    MailSyncModule,
   ],
   controllers: [AppController],
   providers: [

@@ -11,6 +11,16 @@ export interface SanitizedUser {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
+  jobTitle?: string | null;
+  headline?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  pronouns?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  linkedinUrl?: string | null;
+  twitterUrl?: string | null;
+  calendlyUrl?: string | null;
   role: UserRole;
   lastLoginAt?: Date | null;
   createdAt: Date;

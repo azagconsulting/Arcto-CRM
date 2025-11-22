@@ -89,12 +89,10 @@ git add .
 git commit -m "feat: beschreibe kurz die Änderung"
 
 # 4. Änderungen auf GitHub pushen
-#    Wichtig: Gib hier nur den Branchnamen an (kein "main/origin")
-git push origin <branch-name>   # z. B. main oder feature/my-topic
+git push origin main  # z. B. main oder feature/my-topic
 ```
 
 Tipp: Wenn du mit Feature-Branches arbeitest, ersetze `<branch-name>` durch den Namen deines Branches. Falls ein Upstream noch nicht gesetzt wurde (neuer Branch), kannst du einmalig `git push -u origin <branch-name>` verwenden.
-Falls der Push fehlschlägt, prüfe zuerst mit `git remote -v`, wie dein Remote heißt (meist `origin`), und verwende dann exakt diesen Namen: z. B. `git push origin main` oder für einen neuen Branch `git push -u origin feature/mein-thema`.
 
 ## Deployment-Hinweise
 1. `npm run web:build` und `npm run api:build` erzeugen die Production-Bundles.

@@ -93,10 +93,17 @@ export function LandingAuthPanel() {
         </p>
       )}
 
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+      <form
+        className="mt-6 space-y-4"
+        onSubmit={handleSubmit}
+        autoComplete="off"
+        data-lpignore="true"
+        data-1p-ignore="true"
+        suppressHydrationWarning
+      >
         {mode === "register" && (
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
+          <div className="grid gap-4 md:grid-cols-2" suppressHydrationWarning>
+            <div suppressHydrationWarning>
               <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Vorname</label>
               <Input
                 placeholder="Mara"
@@ -106,7 +113,7 @@ export function LandingAuthPanel() {
                 disabled={disabled}
               />
             </div>
-            <div>
+            <div suppressHydrationWarning>
               <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Nachname</label>
               <Input
                 placeholder="Schneider"
@@ -118,7 +125,7 @@ export function LandingAuthPanel() {
             </div>
           </div>
         )}
-        <div>
+        <div suppressHydrationWarning>
           <label className="text-xs uppercase tracking-[0.3em] text-slate-400">E-Mail</label>
           <Input
             required
@@ -130,7 +137,7 @@ export function LandingAuthPanel() {
             disabled={disabled}
           />
         </div>
-        <div>
+        <div suppressHydrationWarning>
           <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Passwort</label>
           <Input
             required
