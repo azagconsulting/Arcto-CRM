@@ -296,7 +296,7 @@ export default function CustomersPage() {
 
   return (
     <>
-      <section className="space-y-8">
+      <section className="flex flex-col h-full gap-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Arcto CRM</p>
@@ -325,45 +325,6 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-white/10 to-white/5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Aktive Kunden</p>
-              <p className="text-3xl font-semibold text-white">{stats.total}</p>
-              <p className="text-sm text-slate-400">{stats.enterprise} Enterprise · {stats.atRisk} mit Risiko</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-3 text-white">
-              <Users className="h-6 w-6" />
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Überwachter MRR</p>
-              <p className="text-3xl font-semibold text-white">{formatCurrency(stats.totalMrrCents)}</p>
-              <p className="text-sm text-slate-400">Filter berücksichtigen Segment & Suche</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-3 text-white">
-              <TrendingUp className="h-6 w-6" />
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Meetings geplant</p>
-              <p className="text-3xl font-semibold text-white">{stats.scheduledMeetings}</p>
-              <p className="text-sm text-slate-400">inkl. öffentlicher Aktivitäten aus Prisma</p>
-            </div>
-            <div className="rounded-2xl bg-white/10 p-3 text-white">
-              <Calendar className="h-6 w-6" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
       <Card className="flex flex-col gap-4 border-white/10 bg-white/5/30">
         <div className="flex flex-wrap items-center gap-3">
           {segmentFilters.map((filter) => (
@@ -382,8 +343,8 @@ export default function CustomersPage() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-sm text-slate-300">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-sm text-slate-300 min-w-[300px]">
             <Search className="h-4 w-4" />
             <input
               type="text"
@@ -393,9 +354,14 @@ export default function CustomersPage() {
               className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none"
             />
           </div>
-          <Button variant="ghost" size="sm">
-            <Filter className="h-4 w-4" /> Filter
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-400">
+                <span className="font-semibold text-white">{stats.total}</span> aktive Kunden
+            </div>
+            <Button variant="ghost" size="sm">
+                <Filter className="h-4 w-4" /> Filter
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3">
           {healthFilters.map((filter) => (
@@ -422,8 +388,8 @@ export default function CustomersPage() {
         {csvImportError && <p className="text-sm text-rose-300">{csvImportError}</p>}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card className="overflow-hidden">
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr] flex-1 min-h-0">
+        <Card className="overflow-hidden flex flex-col">
           <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_80px] gap-6 border-b border-white/5 px-6 py-3 text-xs uppercase tracking-[0.2em] text-slate-500">
             <p>Kunde</p>
             <p>Owner</p>
@@ -431,7 +397,7 @@ export default function CustomersPage() {
             <p>Nächster Schritt</p>
             <p>Status</p>
           </div>
-          <div>
+          <div className="flex-1 space-y-2 overflow-y-auto pr-2">
             {data?.items.length === 0 && !loading && (
               <div className="px-6 py-12 text-center text-sm text-slate-400">
                 Keine Kunden für die aktuelle Kombination gefunden.
@@ -494,11 +460,12 @@ export default function CustomersPage() {
               </div>
             ) : null
           }
+          className="flex flex-col"
         >
           {!activeCustomer ? (
             <p className="text-sm text-slate-400">Kein Kunde in der Auswahl.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1 overflow-y-auto pr-2">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Name</p>
                 <p className="text-2xl font-semibold text-white">{activeCustomer.name}</p>

@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CustomerMessageDirection, CustomerMessageStatus } from '@prisma/client';
+import {
+  CustomerMessageDirection,
+  CustomerMessageStatus,
+} from '@prisma/client';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 
@@ -72,14 +75,14 @@ export class MailSyncService {
             message.internalDate instanceof Date
               ? message.internalDate
               : message.internalDate
-              ? new Date(message.internalDate)
-              : null;
+                ? new Date(message.internalDate)
+                : null;
           if (cutoff && internalDate && internalDate.getTime() < cutoff) {
             lastUid = Math.max(lastUid, message.uid);
             continue;
           }
 
-          const parsed = await simpleParser(message.source as Buffer);
+          const parsed = await simpleParser(message.source);
           const handled = await this.ingestMessage(parsed, message.uid);
           if (handled) {
             processed += 1;
@@ -92,9 +95,7 @@ export class MailSyncService {
         }
       } catch (error) {
         this.logger.error(
-          `Mail-Sync fehlgeschlagen: ${
-            (error as Error)?.message ?? error
-          }`,
+          `Mail-Sync fehlgeschlagen: ${(error as Error)?.message ?? error}`,
         );
       } finally {
         lock.release();
@@ -115,9 +116,7 @@ export class MailSyncService {
 
   private async ingestMessage(parsed: ParsedMail, uid: number) {
     const externalId =
-      typeof parsed.messageId === 'string'
-        ? parsed.messageId
-        : `imap:${uid}`;
+      typeof parsed.messageId === 'string' ? parsed.messageId : `imap:${uid}`;
     const existing = await this.prisma.customerMessage.findFirst({
       where: { externalId },
       select: { id: true },
@@ -133,32 +132,29 @@ export class MailSyncService {
     }
 
     const subject =
-      typeof parsed.subject === 'string'
-        ? parsed.subject
-        : 'Neue Nachricht';
+      typeof parsed.subject === 'string' ? parsed.subject : 'Neue Nachricht';
     const text =
       typeof parsed.text === 'string'
         ? parsed.text
         : parsed.html
-        ? parsed.html.replace(/<[^>]+>/g, ' ')
-        : '';
+          ? parsed.html.replace(/<[^>]+>/g, ' ')
+          : '';
     const preview = this.buildPreview(text);
-    const receivedAt =
-      parsed.date instanceof Date ? parsed.date : new Date();
+    const receivedAt = parsed.date instanceof Date ? parsed.date : new Date();
     const attachments =
       parsed.attachments?.map((item) => {
         const buffer = Buffer.isBuffer(item.content)
           ? item.content
           : item.content
-          ? Buffer.from(item.content as unknown as Uint8Array)
-          : null;
+            ? Buffer.from(item.content as unknown as Uint8Array)
+            : null;
         return {
           name: item.filename || 'Anhang',
           type: item.contentType || null,
           size:
             typeof item.size === 'number'
               ? item.size
-              : buffer?.byteLength ?? null,
+              : (buffer?.byteLength ?? null),
           data: buffer ? buffer.toString('base64') : null,
         };
       }) ?? [];
@@ -198,13 +194,7 @@ export class MailSyncService {
     return value?.trim().toLowerCase() || null;
   }
 
-  private extractAddress(
-    address:
-      | ParsedMail['from']
-      | ParsedMail['to']
-      | ParsedMail['cc']
-      | ParsedMail['bcc'],
-  ) {
+  private extractAddress(address: ParsedMail['from'] | ParsedMail['to']) {
     if (!address) {
       return null;
     }

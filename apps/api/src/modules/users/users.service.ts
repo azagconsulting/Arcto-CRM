@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -7,6 +7,7 @@ import { EmailService } from '../../infra/mailer/email.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import type { SanitizedUser } from '../auth/auth.types';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 interface CreateUserInput {
@@ -173,6 +174,28 @@ export class UsersService {
     });
   }
 
+  async updateEmployee(id: string, dto: UpdateEmployeeDto) {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.firstName) data.firstName = dto.firstName;
+    if (dto.lastName) data.lastName = dto.lastName;
+    if (dto.role) data.role = dto.role;
+
+    const user = await this.prisma.user.update({
+        where: { id },
+        data,
+    });
+    return this.toSanitizedUser(user);
+  }
+
+  async deleteEmployee(id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+        throw new NotFoundException('Mitarbeiter nicht gefunden.');
+    }
+    await this.prisma.user.delete({ where: { id } });
+    return { message: 'Mitarbeiter gelöscht.' };
+  }
+
   private toSanitizedUser(user: User): SanitizedUser {
     return {
       id: user.id,
@@ -201,10 +224,14 @@ export class UsersService {
     lastName?: string;
     password: string;
   }) {
-    const name = [input.firstName, input.lastName].filter(Boolean).join(' ').trim();
+    const name = [input.firstName, input.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
     const loginUrl = process.env.APP_URL ?? 'http://localhost:3000';
     const subject = 'Dein Zugang zum Arcto CRM';
-    const lines = [
+    
+    const text = [
       name ? `Hi ${name},` : 'Hi,',
       '',
       'willkommen im Arcto CRM. Hier sind deine Zugangsdaten:',
@@ -217,12 +244,46 @@ export class UsersService {
       '',
       'Viele Grüße',
       'Dein Arcto Team',
-    ];
+    ].join('\n');
+
+    const html = `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${subject}</title>
+</head>
+<body style="font-family: sans-serif; background-color: #f4f4f4; padding: 20px; color: #333;">
+    <div style="max-width: 600px; margin: auto; background-color: #fff; border-radius: 8px; padding: 40px; border: 1px solid #ddd;">
+        <h1 style="color: #0f172a; font-size: 24px;">Willkommen bei Arcto CRM!</h1>
+        <p style="font-size: 16px; line-height: 1.5;">Hallo ${name || ''},</p>
+        <p style="font-size: 16px; line-height: 1.5;">
+            ein Account für dich wurde erstellt. Hier sind deine Zugangsdaten, um dich anzumelden:
+        </p>
+        <div style="background-color: #f8f8f8; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; font-size: 16px;">
+            <p style="margin: 0 0 10px 0;"><strong>E-Mail:</strong> ${input.email}</p>
+            <p style="margin: 0;"><strong>Passwort:</strong> ${input.password}</p>
+        </div>
+        <p style="font-size: 16px; line-height: 1.5;">
+            Bitte ändere dein Passwort nach dem ersten Login in deinem Profil.
+        </p>
+        <a href="${loginUrl}" style="display: inline-block; background-color: #0f172a; color: #fff; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px; margin-top: 20px;">
+            Jetzt Anmelden
+        </a>
+        <p style="font-size: 14px; color: #777; margin-top: 30px;">
+            Viele Grüße,<br>
+            Dein Arcto Team
+        </p>
+    </div>
+</body>
+</html>`;
 
     await this.emailService.sendEmail({
       to: input.email,
       subject,
-      text: lines.join('\n'),
+      text,
+      html,
     });
   }
 }

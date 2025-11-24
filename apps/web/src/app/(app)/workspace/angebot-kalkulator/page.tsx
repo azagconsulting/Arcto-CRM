@@ -16,6 +16,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -393,30 +395,134 @@ Deutsch, prägnant.`;
   };
 
   const handleCraftPdfExport = async () => {
-    if (typeof window === "undefined") {
-      return;
-    }
     if (!workspace && !workspaceLoading) {
       await fetchWorkspaceData();
     }
-    const html = buildCraftPdfHtml({
-      name: customerName,
-      address: customerAddress,
-      email: customerEmail,
-      phone: customerPhone,
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const now = new Date();
+    const currency = craft.currency;
+    const company =
+      workspace?.companyName ||
+      workspace?.legalName ||
+      "Ihre Firma";
+    const fmt = (num: number) =>
+      num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + currency;
+    const primary = [56, 189, 248];
+    const muted = [90, 100, 110];
+
+    // Hintergrund
+    doc.setFillColor(248, 250, 255);
+    doc.rect(0, 0, 210, 297, "F");
+
+    // Header
+    doc.setFillColor(primary[0], primary[1], primary[2]);
+    doc.rect(0, 0, 210, 28, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.text("Ungefähre Ersteinschätzung", 12, 13);
+    doc.setFontSize(9);
+    doc.text(`Projekt: ${craft.jobTitle || "-"}`, 120, 9);
+    doc.text(`Datum: ${now.toLocaleDateString("de-DE")}`, 120, 14);
+    doc.text(`Währung: ${currency}`, 120, 19);
+    doc.text(`Firma: ${company}`, 12, 23);
+
+    // Kundendaten (optional)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text("Kunde / Firma", 12, 30);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(muted[0], muted[1], muted[2]);
+    doc.text(customerName || "–", 12, 36);
+    doc.text(customerAddress || "–", 12, 40);
+    doc.text(customerEmail || "–", 12, 44);
+    doc.text(customerPhone || "–", 12, 48);
+
+    // Projektübersicht
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Projektübersicht", 12, 58);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(muted[0], muted[1], muted[2]);
+    doc.text(`Stunden: ${craftNumeric.hours} @ ${fmt(craftNumeric.hourlyRate)}/Std.`, 12, 64);
+    doc.text(`Material: ${fmt(craftNumeric.materialCost)}`, 12, 68);
+    doc.text(`Anfahrt: ${craftNumeric.travelKm} km @ ${fmt(craftNumeric.travelRate)}/km`, 12, 72);
+    doc.text(`Rabatt: ${(craftNumeric.discountRate * 100).toFixed(1)} %  |  MwSt: ${(craftNumeric.vatRate * 100).toFixed(1)} %`, 12, 76);
+
+    // Tabelle
+    autoTable(doc, {
+      startY: 82,
+      head: [["Position", "Beschreibung", "Betrag"]],
+      body: [
+        ["Arbeitsleistung", `${craftNumeric.hours} Std. à ${fmt(craftNumeric.hourlyRate)}/Std.`, fmt(craftNumeric.labor)],
+        ["Material", "Pauschal / nach Aufwand", fmt(craftNumeric.materialCost)],
+        ["Anfahrt", `${craftNumeric.travelKm} km à ${fmt(craftNumeric.travelRate)}/km`, fmt(craftNumeric.travel)],
+      ],
+      theme: "striped",
+      headStyles: { fillColor: primary, textColor: 255 },
+      styles: { cellPadding: 3, fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 60, fontStyle: "bold" },
+        1: { cellWidth: 90 },
+        2: { cellWidth: 40, halign: "right" },
+      },
     });
-    const printWindow = window.open("", "PRINT", "width=900,height=1200");
-    if (!printWindow) {
-      setAiError("PDF konnte nicht geöffnet werden. Bitte Popups erlauben.");
-      return;
+
+    // Summenblock
+    let finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFillColor(245, 248, 255);
+    doc.setDrawColor(primary[0], primary[1], primary[2]);
+    doc.roundedRect(118, finalY - 6, 80, 38, 2, 2, "FD");
+    finalY += 4;
+    const addSummary = (label: string, value: string, color?: [number, number, number], bold?: boolean) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(10);
+      if (color) doc.setTextColor(...color);
+      doc.text(label, 125, finalY);
+      doc.text(value, 195, finalY, { align: "right" });
+      doc.setTextColor(0);
+      finalY += 6;
+    };
+    addSummary("Zwischensumme:", fmt(craftNumeric.subtotal));
+    if (craftNumeric.discount > 0) {
+      addSummary(`Rabatt (${(craftNumeric.discountRate * 100).toFixed(1)} %):`, `- ${fmt(craftNumeric.discount)}`, [200, 70, 70]);
     }
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 200);
+    addSummary("Netto:", fmt(craftNumeric.net), undefined, true);
+    addSummary(`zzgl. MwSt (${craft.vatPercent}%):`, fmt(craftNumeric.vat));
+    doc.setDrawColor(primary[0], primary[1], primary[2]);
+    doc.setLineWidth(0.6);
+    doc.line(125, finalY - 4, 195, finalY - 4);
+    finalY += 2;
+    addSummary("Gesamt (Brutto):", fmt(craftNumeric.gross), primary as any, true);
+
+    // Notizen
+    finalY += 14;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Notizen / Besonderheiten", 12, finalY);
+    finalY += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const splitNotes = doc.splitTextToSize(craft.notes || "-", 180);
+    doc.text(splitNotes, 12, finalY);
+
+    // Footer
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setTextColor(muted[0], muted[1], muted[2]);
+    doc.text(
+      "Vorläufige Einschätzung, kein verbindliches Festpreisangebot. Tatsächliche Kosten können nach Aufmaß abweichen.",
+      12,
+      pageHeight - 12,
+    );
+    doc.text(`PDF v4 ${now.toISOString()}`, 12, pageHeight - 7);
+
+    doc.save(`Kostenvoranschlag_v4_${craft.jobTitle.replace(/\s+/g, "_")}.pdf`);
   };
 
   return (

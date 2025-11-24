@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import nodemailer, { type Transporter } from 'nodemailer';
+import nodemailer, {
+  type Transporter,
+  type SentMessageInfo,
+  type SendMailOptions,
+} from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 import type {
   SmtpCredentials,
@@ -29,7 +34,7 @@ export interface EmailAttachment {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter?: Transporter;
+  private transporter?: Transporter<SentMessageInfo>;
   private readonly defaultSender?: string;
   private readonly defaultCredentials?: SmtpCredentials;
 
@@ -71,7 +76,7 @@ export class EmailService {
     options: SendEmailOptions,
     override?: SmtpCredentials,
   ): Promise<EmailSendResult> {
-    const payload = {
+    const payload: SendMailOptions = {
       from:
         options.from ??
         override?.fromEmail ??
@@ -90,57 +95,82 @@ export class EmailService {
       return this.sendWithCustomCredentials(payload, override);
     }
 
-    if (!this.transporter) {
+    const transporter = this.transporter;
+    if (!transporter) {
       return this.logDryRun(payload);
     }
 
-    const response = await this.transporter.sendMail(payload);
+    // nodemailer typings return `any` here; assert expected response shape
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const response: SentMessageInfo = await transporter.sendMail(payload);
     return { messageId: this.resolveMessageId(response) };
   }
 
   private async sendWithCustomCredentials(
-    payload: SendEmailOptions,
+    payload: SendMailOptions,
     credentials: SmtpCredentials,
   ) {
     const transport = this.createTransport(credentials);
-    const response = await transport.sendMail({
+    const mailOptions: SendMailOptions = {
       ...payload,
       from:
         payload.from ??
         credentials.fromEmail ??
         credentials.username ??
         this.defaultSender,
-    });
+    };
+    // nodemailer typings return `any` here; assert expected response shape
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const response: SentMessageInfo = await transport.sendMail(mailOptions);
     return { messageId: this.resolveMessageId(response) };
   }
 
-  private createTransport(credentials: SmtpCredentials) {
-    return nodemailer.createTransport({
+  private createTransport(
+    credentials: SmtpCredentials,
+  ): Transporter<SentMessageInfo> {
+    const smtpOptions: SMTPTransport.Options = {
       host: credentials.host,
       port: credentials.port,
-      secure: credentials.encryption === 'ssl',
+      secure: credentials.port === 465, // true for 465, false for other ports
       auth: {
         user: credentials.username,
         pass: credentials.password,
       },
-    });
+    };
+    return nodemailer.createTransport<SentMessageInfo>(smtpOptions);
   }
 
   private inferEncryption(port?: number): SmtpEncryption {
     if (port === 465) {
       return 'ssl';
     }
-    if (port === 25) {
+    if (port === 25 || port === 1025) {
       return 'none';
     }
     return 'tls';
   }
 
-  private logDryRun(payload: SendEmailOptions): EmailSendResult {
+  private logDryRun(payload: SendMailOptions): EmailSendResult {
+    const recipient = this.formatRecipient(payload.to);
     this.logger.warn(
-      `Kein SMTP-Transport verfügbar. Simuliere Versand an ${payload.to} mit Betreff "${payload.subject}".`,
+      `Kein SMTP-Transport verfügbar. Simuliere Versand an ${recipient} mit Betreff "${payload.subject ?? '(kein Betreff)'}".`,
     );
     return { messageId: `dry-run-${Date.now()}` };
+  }
+
+  private formatRecipient(value: SendMailOptions['to']) {
+    const toString = (entry: string | { address: string; name?: string }) =>
+      typeof entry === 'string'
+        ? entry
+        : [entry.name, entry.address].filter(Boolean).join(' ').trim();
+
+    if (!value) {
+      return 'unbekannt';
+    }
+    if (Array.isArray(value)) {
+      return value.map(toString).join(', ');
+    }
+    return toString(value as string | { address: string; name?: string });
   }
 
   private resolveMessageId(result: unknown) {

@@ -124,7 +124,7 @@ export class SettingsService {
       sinceDays:
         typeof dto.sinceDays === 'number'
           ? dto.sinceDays
-          : existing?.sinceDays ?? 7,
+          : (existing?.sinceDays ?? 7),
     };
 
     const saved = await this.saveSetting(IMAP_SETTING_KEY, data);
@@ -211,9 +211,7 @@ export class SettingsService {
     };
   }
 
-  async updateApiSettings(
-    dto: UpdateApiSettingsDto,
-  ): Promise<{
+  async updateApiSettings(dto: UpdateApiSettingsDto): Promise<{
     embedUrl: string | null;
     apiToken: string | null;
     hasServiceAccount: boolean;
@@ -224,10 +222,7 @@ export class SettingsService {
       ? this.parseApiSettings(existingRecord.value)
       : null;
 
-    const nextToken =
-      dto.apiToken?.trim() ||
-      existingParsed?.apiToken ||
-      null;
+    const nextToken = dto.apiToken?.trim() || existingParsed?.apiToken || null;
 
     const embedUrl = dto.embedUrl?.trim() || existingParsed?.embedUrl || null;
     const serviceAccountJson =
@@ -505,9 +500,11 @@ export class SettingsService {
     };
   }
 
-  private parseApiSettings(
-    value: Prisma.JsonValue,
-  ): { embedUrl: string | null; apiToken: string | null; serviceAccountJson?: string | null } | null {
+  private parseApiSettings(value: Prisma.JsonValue): {
+    embedUrl: string | null;
+    apiToken: string | null;
+    serviceAccountJson?: string | null;
+  } | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return { embedUrl: null, apiToken: null, serviceAccountJson: null };
     }

@@ -59,6 +59,7 @@ export interface Lead {
   routingLabel?: string | null;
   status: LeadStatus;
   priority: LeadPriority;
+   processedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   assignedTo?: LeadAssignment | null;
@@ -181,6 +182,7 @@ export interface CustomerListResponse {
 export type CustomerMessageDirection = "INBOUND" | "OUTBOUND";
 
 export type CustomerMessageStatus = "DRAFT" | "QUEUED" | "SENDING" | "SENT" | "FAILED";
+export type MessageCategory = "ANGEBOT" | "KRITISCH" | "KUENDIGUNG" | "WERBUNG" | "SONSTIGES";
 
 export interface CustomerMessageContact {
   id: string;
@@ -215,6 +217,13 @@ export interface CustomerMessage {
   receivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  
+  // AI Analysis
+  category?: MessageCategory | null;
+  sentiment?: string | null;
+  urgency?: string | null;
+  summary?: string | null;
+  analyzedAt?: string | null;
 }
 
 export interface CustomerMessageListResponse {

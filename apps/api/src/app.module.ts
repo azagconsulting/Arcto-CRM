@@ -18,6 +18,7 @@ import { BlogModule } from './modules/blog/blog.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { MailSyncModule } from './modules/mail-sync/mail-sync.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { MailSyncModule } from './modules/mail-sync/mail-sync.module';
     SettingsModule,
     UsersModule,
     MailSyncModule,
+    MessagesModule,
   ],
   controllers: [AppController],
   providers: [

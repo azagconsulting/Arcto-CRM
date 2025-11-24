@@ -60,6 +60,14 @@ enum CustomerMessageStatus {
   FAILED
 }
 
+enum MessageCategory {
+  ANGEBOT
+  KRITISCH
+  KUENDIGUNG
+  WERBUNG
+  SONSTIGES
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique @db.VarChar(191)
@@ -237,6 +245,13 @@ model CustomerMessage {
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 
+  // AI analysis fields
+  category    MessageCategory?
+  sentiment   String?                 @db.VarChar(64)
+  urgency     String?                 @db.VarChar(64)
+  summary     String?                 @db.VarChar(512)
+  analyzedAt  DateTime?
+
   customer Customer?       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   lead     Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
   contact  CustomerContact? @relation(fields: [contactId], references: [id])
@@ -244,6 +259,7 @@ model CustomerMessage {
   @@index([customerId, createdAt])
   @@index([contactId])
   @@index([leadId, createdAt])
+  @@index([analyzedAt])
 }
 
 model SystemSetting {

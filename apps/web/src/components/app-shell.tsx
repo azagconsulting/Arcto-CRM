@@ -103,6 +103,12 @@ const navigationBase: NavigationItem[] = [
         icon: Sparkles,
         description: "Automatisierte Beiträge mit OpenAI",
       },
+      {
+        title: "Legal Advisor",
+        href: "/workspace/legal-advisor",
+        icon: Sparkles,
+        description: "Informelle Ersteinschätzung mit Dokumentanhang",
+      },
     ],
   },
 ];

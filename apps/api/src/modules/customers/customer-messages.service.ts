@@ -112,11 +112,36 @@ export class CustomerMessagesService {
 
     const limit = Math.min(dto?.limit ?? 30, 100);
 
+    const contactEmails = Array.from(
+      new Set(
+        customer.contacts
+          .map((contact) => this.normalizeEmail(contact.email))
+          .filter((email): email is string => Boolean(email)),
+      ),
+    );
+
     const records = await this.prisma.customerMessage.findMany({
-      where: { customerId },
+      where: {
+        OR: [
+          { customerId },
+          contactEmails.length ? { toEmail: { in: contactEmails } } : undefined,
+          contactEmails.length
+            ? { fromEmail: { in: contactEmails } }
+            : undefined,
+        ].filter(Boolean) as Prisma.CustomerMessageWhereInput[],
+      },
       include: { contact: true },
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+
+    const seen = new Set<string>();
+    const normalized = records.filter((record) => {
+      if (seen.has(record.id)) {
+        return false;
+      }
+      seen.add(record.id);
+      return true;
     });
 
     return {
@@ -131,7 +156,7 @@ export class CustomerMessagesService {
           channel: contact.channel,
         })),
       },
-      items: records.map((record) => this.toResponse(record)),
+      items: normalized.map((record) => this.toResponse(record)),
     };
   }
 
@@ -365,6 +390,54 @@ export class CustomerMessagesService {
     return this.toResponse(saved);
   }
 
+  async listSent(
+    dto: ListCustomerMessagesDto,
+  ): Promise<CustomerMessageResponse[]> {
+    const limit = Math.min(dto?.limit ?? 50, 200);
+    const records = await this.prisma.customerMessage.findMany({
+      where: {
+        direction: CustomerMessageDirection.OUTBOUND,
+        ...(dto.customerId && { customerId: dto.customerId }),
+      },
+      include: { contact: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return records.map((record) => this.toResponse(record));
+  }
+
+  async listInbox(
+    dto: ListCustomerMessagesDto,
+  ): Promise<CustomerMessageResponse[]> {
+    const limit = Math.min(dto?.limit ?? 50, 200);
+    const records = await this.prisma.customerMessage.findMany({
+      where: {
+        direction: CustomerMessageDirection.INBOUND,
+        ...(dto.customerId && { customerId: dto.customerId }),
+      },
+      include: { contact: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return records.map((record) => this.toResponse(record));
+  }
+
+  async listSpam(
+    dto: ListCustomerMessagesDto,
+  ): Promise<CustomerMessageResponse[]> {
+    // TODO: Implement actual spam filtering
+    const limit = Math.min(dto?.limit ?? 40, 200);
+    void limit;
+
+    if (dto.customerId) {
+      // If a customerId is provided, it doesn't make sense to show spam,
+      // as spam is typically not associated with a specific customer.
+      return Promise.resolve([]);
+    }
+
+    return Promise.resolve([]);
+  }
+
   async listUnassignedMessages(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
@@ -391,8 +464,7 @@ export class CustomerMessagesService {
       );
     }
 
-    const subject =
-      dto.subject?.trim() ?? 'Antwort aus deinem Workspace';
+    const subject = dto.subject?.trim() ?? 'Antwort aus deinem Workspace';
     const preview = dto.preview?.trim() ?? this.buildPreview(dto.body);
     const fromEmail =
       dto.fromEmail?.trim() ?? this.emailService.getDefaultSender();
@@ -572,8 +644,10 @@ export class CustomerMessagesService {
         contentType: attachment.type || 'application/octet-stream',
       }));
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unbekannter Fehler';
       throw new BadRequestException(
-        'Anhänge konnten nicht verarbeitet werden.',
+        `Anhänge konnten nicht verarbeitet werden: ${message}`,
       );
     }
   }
@@ -634,7 +708,9 @@ export class CustomerMessagesService {
       (acc, group) => {
         if (group.leadId) {
           const value =
-            typeof group._count === 'object' && group._count && '_all' in group._count
+            typeof group._count === 'object' &&
+            group._count &&
+            '_all' in group._count
               ? Number((group._count as { _all?: number })._all ?? 0)
               : 0;
           acc[group.leadId] = value;

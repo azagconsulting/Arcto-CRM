@@ -135,6 +135,20 @@ export class LeadsService {
     return updated;
   }
 
+  async markLeadRead(id: string) {
+    const existing = await this.prisma.lead.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Lead nicht gefunden');
+    }
+
+    const processedAt = existing.processedAt ?? new Date();
+
+    return this.prisma.lead.update({
+      where: { id },
+      data: { processedAt },
+    });
+  }
+
   async getTimeline(leadId: string) {
     await this.ensureLeadExists(leadId);
 
@@ -149,10 +163,9 @@ export class LeadsService {
     notifyEmail?: string;
     autoAssignUserId?: string;
   }) {
-    let settings =
-      await this.prisma.leadWorkflowSetting.findFirst({
-        include: { autoAssignUser: true },
-      });
+    let settings = await this.prisma.leadWorkflowSetting.findFirst({
+      include: { autoAssignUser: true },
+    });
 
     if (!settings) {
       settings = await this.prisma.leadWorkflowSetting.create({
@@ -216,10 +229,7 @@ export class LeadsService {
     settings: LeadWorkflowSettingsEntity | null,
     smtpCredentials: SmtpCredentials | null,
   ) {
-    const recipients = await this.collectNotificationRecipients(
-      settings,
-      lead,
-    );
+    const recipients = await this.collectNotificationRecipients(settings, lead);
     if (!recipients.length) {
       this.logger.warn(
         'Neue Anfrage ohne Benachrichtigung, da kein Empfänger ermittelt werden konnte.',
@@ -412,8 +422,9 @@ export class LeadsService {
       phone: lead.phone ?? '',
     };
 
-    return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, token) => {
-      return replacements[token] ?? '';
+    return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, token: string) => {
+      const key = token;
+      return replacements[key] ?? '';
     });
   }
 

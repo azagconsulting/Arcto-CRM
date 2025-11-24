@@ -61,4 +61,9 @@ export class LeadsController {
   ) {
     return this.leadsService.updateLead(id, dto, user);
   }
+
+  @Patch(':id/read')
+  markRead(@Param('id') id: string) {
+    return this.leadsService.markLeadRead(id);
+  }
 }

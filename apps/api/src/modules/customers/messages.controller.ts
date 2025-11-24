@@ -20,6 +20,21 @@ export class MessagesController {
     return this.messagesService.listByEmail(email);
   }
 
+  @Get('sent')
+  listSent(@Query() query: ListCustomerMessagesDto) {
+    return this.messagesService.listSent(query);
+  }
+
+  @Get('inbox')
+  listInbox(@Query() query: ListCustomerMessagesDto) {
+    return this.messagesService.listInbox(query);
+  }
+
+  @Get('spam')
+  listSpam(@Query() query: ListCustomerMessagesDto) {
+    return this.messagesService.listSpam(query);
+  }
+
   @Get('unassigned')
   listUnassigned(@Query() query: ListCustomerMessagesDto) {
     return this.messagesService.listUnassignedMessages(query);
