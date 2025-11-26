@@ -58,4 +58,11 @@ export class UpdateSmtpSettingsDto {
   @IsOptional()
   @IsIn(ENCRYPTION_VALUES)
   encryption?: SmtpEncryption;
+
+  // Frontend sends read-only flags; ignore them for validation.
+  @IsOptional()
+  hasPassword?: boolean;
+
+  @IsOptional()
+  updatedAt?: string;
 }

@@ -222,18 +222,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!sidebarCollapsed && <Logo className="text-[var(--text-primary)]" href="/dashboard" />}
           {sidebarCollapsed && (
             <div className="relative flex flex-col items-center gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="hidden lg:inline-flex text-[var(--text-primary)]"
-                onClick={() => setSidebarCollapsed((prev) => !prev)}
-                title="Sidebar ausklappen"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Link href="/dashboard" className="flex items-center text-[var(--text-primary)]">
-                <span className="text-lg font-semibold leading-none">A</span>
-              </Link>
+              <Logo className="text-[var(--text-primary)]" href="/dashboard" size={40} showText={false} />
             </div>
           )}
           <div className={clsx("flex items-center gap-2", sidebarCollapsed && "w-full justify-end")}>
@@ -241,7 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button
                 size="icon"
                 variant="ghost"
-                className="hidden lg:inline-flex text-[var(--text-primary)]"
+                className="inline-flex lg:hidden text-[var(--text-primary)]"
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
                 title="Sidebar ein-/ausfahren"
               >
@@ -471,6 +460,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </div>
+
+        {/* Desktop Collapse/Expand Toggle at lower edge */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="hidden lg:flex absolute top-1/2 -translate-y-1/2 -right-3 h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-800"
+          onClick={() => setSidebarCollapsed((prev) => !prev)}
+          aria-label="Sidebar ein-/ausfahren"
+          title="Sidebar ein-/ausfahren"
+        >
+          {sidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+        </Button>
       </aside>
       {sidebarOpen && (
         <div

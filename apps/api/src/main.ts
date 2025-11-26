@@ -12,6 +12,8 @@ import { AppModule } from './app.module';
 import type { AppConfig } from './config/app.config';
 import { PrismaExceptionFilter } from './infra/prisma/prisma-exception.filter';
 import { PrismaService } from './infra/prisma/prisma.service';
+import { RequestContextInterceptor } from './infra/request-context/request-context.interceptor';
+import { RequestContextService } from './infra/request-context/request-context.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -40,7 +42,11 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
+  const requestContext = app.get(RequestContextService);
+  app.useGlobalInterceptors(
+    new RequestContextInterceptor(requestContext),
+    new ClassSerializerInterceptor(reflector),
+  );
   app.useGlobalFilters(new PrismaExceptionFilter());
 
   const prismaService = app.get(PrismaService);

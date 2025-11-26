@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/infra/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { CustomerMessage, MessageCategory } from '@prisma/client';
 import OpenAI from 'openai';
 
@@ -17,11 +18,16 @@ export class MessagesService {
     if (apiKey) {
       this.openai = new OpenAI({ apiKey });
     } else {
-      this.logger.warn('OPENAI_API_KEY is not configured. AI analysis will be disabled.');
+      this.logger.warn(
+        'OPENAI_API_KEY is not configured. AI analysis will be disabled.',
+      );
     }
   }
 
   async analyzeMessage(id: string): Promise<CustomerMessage> {
+    if (!this.openai) {
+      return this.prisma.customerMessage.findUniqueOrThrow({ where: { id } });
+    }
     const message = await this.prisma.customerMessage.findUnique({
       where: { id },
     });
@@ -89,6 +95,57 @@ export class MessagesService {
       this.logger.error(`Failed to analyze message ${id} with OpenAI:`, error);
       // Don't throw error to client, just return original message
       return message;
+    }
+  }
+
+  // Analyze up to the last 5 unanalysed inbound messages per tenant.
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async analyzeLatestInbound() {
+    if (!this.openai) {
+      this.logger.debug?.('Skipping message analysis: OPENAI_API_KEY not set.');
+      return;
+    }
+    const candidates = await this.prisma.customerMessage.findMany({
+      where: {
+        direction: 'INBOUND',
+        analyzedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50, // fetch enough to fan out per tenant
+      select: { id: true, tenantId: true },
+    });
+
+    const perTenant: Record<string, string[]> = {};
+    for (const row of candidates) {
+      if (!row.tenantId) {
+        continue;
+      }
+      perTenant[row.tenantId] = perTenant[row.tenantId] ?? [];
+      if (perTenant[row.tenantId].length < 5) {
+        perTenant[row.tenantId].push(row.id);
+      }
+    }
+
+    for (const ids of Object.values(perTenant)) {
+      for (const id of ids) {
+        try {
+          await this.analyzeMessage(id);
+        } catch (err) {
+          this.logger.warn(`Analyse für Message ${id} fehlgeschlagen: ${(err as Error)?.message}`);
+        }
+      }
+    }
+  }
+
+  // Purge messages (and their stored analysis) older than 14 days.
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async purgeOldMessages() {
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.customerMessage.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    if (result.count) {
+      this.logger.log(`Purged ${result.count} messages older than 14 days.`);
     }
   }
 }

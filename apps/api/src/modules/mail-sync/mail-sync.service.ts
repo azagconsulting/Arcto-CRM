@@ -8,6 +8,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class MailSyncService {
   constructor(
     private readonly settingsService: SettingsService,
     private readonly prisma: PrismaService,
+    private readonly requestContext: RequestContextService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -27,6 +29,24 @@ export class MailSyncService {
       return;
     }
 
+    const tenants = await this.prisma.tenant.findMany({ select: { id: true } });
+    if (!tenants.length) {
+      return;
+    }
+
+    this.syncing = true;
+    try {
+      for (const tenant of tenants) {
+        await this.requestContext.run({ tenantId: tenant.id }, async () => {
+          await this.syncTenantMailbox(tenant.id);
+        });
+      }
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  private async syncTenantMailbox(tenantId: string) {
     const imapSettings = await this.settingsService.getImapCredentials();
     if (!imapSettings) {
       return;
@@ -37,27 +57,28 @@ export class MailSyncService {
       typeof imapSettings.sinceDays === 'number'
         ? Date.now() - imapSettings.sinceDays * 24 * 60 * 60 * 1000
         : null;
-    this.syncing = true;
-    try {
-      const client = new ImapFlow({
-        host: imapSettings.host,
-        port: imapSettings.port,
-        secure: imapSettings.encryption === 'ssl',
-        tls:
-          imapSettings.encryption === 'tls'
-            ? { rejectUnauthorized: false }
-            : undefined,
-        auth: {
-          user: imapSettings.username,
-          pass: imapSettings.password,
-        },
-      });
 
+    const client = new ImapFlow({
+      host: imapSettings.host,
+      port: imapSettings.port,
+      secure: imapSettings.encryption === 'ssl',
+      tls:
+        imapSettings.encryption === 'tls'
+          ? { rejectUnauthorized: false }
+          : undefined,
+      auth: {
+        user: imapSettings.username,
+        pass: imapSettings.password,
+      },
+    });
+
+    let lastUid = state?.lastUid ?? 0;
+    let processed = 0;
+
+    try {
       await client.connect();
       const mailbox = imapSettings.mailbox || 'INBOX';
       const lock = await client.getMailboxLock(mailbox);
-      let lastUid = state?.lastUid ?? 0;
-      let processed = 0;
 
       try {
         const range = lastUid ? `${lastUid + 1}:*` : '1:*';
@@ -65,10 +86,7 @@ export class MailSyncService {
           { uid: range },
           { envelope: true, source: true, internalDate: true, uid: true },
         )) {
-          if (!message.uid) {
-            continue;
-          }
-          if (!message.source) {
+          if (!message.uid || !message.source) {
             continue;
           }
           const internalDate =
@@ -83,42 +101,35 @@ export class MailSyncService {
           }
 
           const parsed = await simpleParser(message.source);
-          const handled = await this.ingestMessage(parsed, message.uid);
+          const handled = await this.ingestMessage(parsed, message.uid, tenantId);
           if (handled) {
             processed += 1;
             lastUid = Math.max(lastUid, message.uid);
           }
           if (processed >= 100) {
-            // prevent endless catch-up in one tick
             break;
           }
         }
-      } catch (error) {
-        this.logger.error(
-          `Mail-Sync fehlgeschlagen: ${(error as Error)?.message ?? error}`,
-        );
       } finally {
         lock.release();
-        await client.logout().catch(() => undefined);
-      }
-
-      if (lastUid && lastUid !== state?.lastUid) {
-        await this.settingsService.saveImapSyncState({ lastUid });
       }
     } catch (error) {
       this.logger.error(
-        `IMAP-Verbindung fehlgeschlagen: ${(error as Error)?.message ?? error}`,
+        `Mail-Sync Tenant ${tenantId} fehlgeschlagen: ${(error as Error)?.message ?? error}`,
       );
     } finally {
-      this.syncing = false;
+      await client.logout().catch(() => undefined);
+      if (lastUid && lastUid !== state?.lastUid) {
+        await this.settingsService.saveImapSyncState({ lastUid });
+      }
     }
   }
 
-  private async ingestMessage(parsed: ParsedMail, uid: number) {
+  private async ingestMessage(parsed: ParsedMail, uid: number, tenantId: string) {
     const externalId =
       typeof parsed.messageId === 'string' ? parsed.messageId : `imap:${uid}`;
     const existing = await this.prisma.customerMessage.findFirst({
-      where: { externalId },
+      where: { externalId, tenantId },
       select: { id: true },
     });
     if (existing) {
@@ -170,9 +181,12 @@ export class MailSyncService {
 
     await this.prisma.customerMessage.create({
       data: {
-        customerId: contact?.customerId ?? null,
-        contactId: contact?.id ?? null,
-        leadId: null,
+        tenant: { connect: { id: tenantId } },
+        customer: contact?.customerId
+          ? { connect: { id: contact.customerId } }
+          : undefined,
+        contact: contact?.id ? { connect: { id: contact.id } } : undefined,
+        lead: undefined,
         direction: CustomerMessageDirection.INBOUND,
         status: CustomerMessageStatus.SENT,
         subject,

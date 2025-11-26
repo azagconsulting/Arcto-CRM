@@ -7,8 +7,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 import type { AppConfig } from '../../config/app.config';
+import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LeadsService } from '../leads/leads.service';
 import { UsersService } from '../users/users.service';
 import type {
@@ -33,6 +35,7 @@ export class AuthService {
     private readonly leadsService: LeadsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<AppConfig, true>,
+    private readonly prisma: PrismaService,
   ) {
     const auth = this.configService.getOrThrow('auth', { infer: true });
     this.jwtSecret = auth.jwt.secret;
@@ -49,20 +52,30 @@ export class AuthService {
       );
     }
 
+    const tenant = await this.prisma.tenant.create({
+      data: {
+        name: dto.lastName
+          ? `${dto.firstName ?? ''} ${dto.lastName}`.trim() || dto.email
+          : dto.email,
+        slug: this.slugify(dto.email),
+        description: 'Workspace erstellt über Self-Service Signup',
+      },
+    });
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const userCount = await this.usersService.count();
-    const role = userCount === 0 ? UserRole.ADMIN : UserRole.COORDINATOR;
     const user = await this.usersService.create({
+      tenantId: tenant.id,
       email: dto.email,
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
-      role,
+      role: UserRole.ADMIN,
     });
 
     await this.leadsService.ensureWorkflowSettings({
       notifyEmail: dto.email,
       autoAssignUserId: user.id,
+      tenantId: tenant.id,
     });
 
     return this.buildAuthResponse(user);
@@ -108,6 +121,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -134,6 +148,7 @@ export class AuthService {
   private mapUser(user: User): SanitizedUser {
     return {
       id: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -177,5 +192,16 @@ export class AuthService {
 
   toSafeUser(user: User): SanitizedUser {
     return this.mapUser(user);
+  }
+
+  private slugify(email: string): string {
+    const candidate = email.includes('@') ? email.split('@')[1] || email : email;
+    const base = candidate
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 32) || 'workspace';
+    const suffix = randomBytes(3).toString('hex');
+    return `${base}-${suffix}`;
   }
 }

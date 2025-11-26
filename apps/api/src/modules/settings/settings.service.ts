@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, SystemSetting } from '@prisma/client';
+import { Prisma, TenantSetting } from '@prisma/client';
+import nodemailer from 'nodemailer';
 
 import {
   SmtpCredentials,
@@ -12,6 +13,7 @@ import {
   ImapEncryption,
 } from '../../common/interfaces/imap-settings.interface';
 import { WorkspaceSettings } from '../../common/interfaces/workspace-settings.interface';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { UpdateSmtpSettingsDto } from './dto/update-smtp-settings.dto';
 import { UpdateImapSettingsDto } from './dto/update-imap-settings.dto';
@@ -26,7 +28,10 @@ const API_SETTING_KEY = 'api-settings';
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   async getSmtpSettings(): Promise<SmtpSettingsResponse | null> {
     const record = await this.findSettingRecord(SMTP_SETTING_KEY);
@@ -95,6 +100,8 @@ export class SettingsService {
       encryption: dto.encryption ?? existing?.encryption ?? 'tls',
     };
 
+    await this.verifySmtpCredentials(data);
+
     const saved = await this.saveSetting(SMTP_SETTING_KEY, data);
 
     return this.mapToResponse(data, saved.updatedAt);
@@ -126,6 +133,9 @@ export class SettingsService {
           ? dto.sinceDays
           : (existing?.sinceDays ?? 7),
     };
+
+    await this.verifyImapCredentials(data);
+    data.verifiedAt = new Date().toISOString();
 
     const saved = await this.saveSetting(IMAP_SETTING_KEY, data);
     return this.mapImapToResponse(data, saved.updatedAt);
@@ -259,20 +269,29 @@ export class SettingsService {
     await this.saveSetting(IMAP_SYNC_STATE_KEY, state);
   }
 
-  private async findSettingRecord(key: string): Promise<SystemSetting | null> {
-    return this.prisma.systemSetting.findUnique({
-      where: { key },
+  private async findSettingRecord(key: string): Promise<TenantSetting | null> {
+    const tenantId = this.context.getTenantId();
+    if (!tenantId) {
+      return null;
+    }
+    return this.prisma.tenantSetting.findFirst({
+      where: { tenantId, key },
     });
   }
 
   private async saveSetting(
     key: string,
     value: unknown,
-  ): Promise<SystemSetting> {
+  ): Promise<TenantSetting> {
+    const tenantId = this.context.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('Kein Tenant-Kontext vorhanden.');
+    }
+
     const jsonValue = this.toJsonInput(value);
-    return this.prisma.systemSetting.upsert({
-      where: { key },
-      create: { key, value: jsonValue },
+    return this.prisma.tenantSetting.upsert({
+      where: { tenantId_key: { tenantId, key } },
+      create: { tenantId, key, value: jsonValue },
       update: { value: jsonValue },
     });
   }
@@ -369,6 +388,10 @@ export class SettingsService {
         Number.isFinite(payload.sinceDays)
           ? payload.sinceDays
           : undefined,
+      verifiedAt:
+        typeof (payload as Record<string, unknown>).verifiedAt === 'string'
+          ? ((payload as Record<string, unknown>).verifiedAt as string)
+          : undefined,
     };
   }
 
@@ -393,7 +416,59 @@ export class SettingsService {
       hasPassword: Boolean(data.password),
       sinceDays: data.sinceDays,
       updatedAt: updatedAt.toISOString(),
+      verifiedAt: data.verifiedAt ?? null,
     };
+  }
+
+  private async verifyImapCredentials(creds: ImapCredentials) {
+    // quick auth check to ensure credentials are valid
+    const client = new (await import('imapflow')).ImapFlow({
+      host: creds.host,
+      port: creds.port,
+      secure: creds.encryption === 'ssl',
+      tls: creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
+      auth: {
+        user: creds.username,
+        pass: creds.password,
+      },
+    });
+    try {
+      await client.connect();
+    } catch (error) {
+      throw new BadRequestException(
+        `IMAP Login fehlgeschlagen: ${(error as Error)?.message ?? 'Unbekannter Fehler'}`,
+      );
+    } finally {
+      try {
+        await client.logout();
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  private async verifySmtpCredentials(creds: SmtpCredentials) {
+    const transport = nodemailer.createTransport({
+      host: creds.host,
+      port: creds.port,
+      secure: creds.encryption === 'ssl',
+      requireTLS: creds.encryption === 'tls',
+      auth: {
+        user: creds.username,
+        pass: creds.password,
+      },
+      tls: creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
+    });
+
+    try {
+      await transport.verify();
+    } catch (error) {
+      throw new BadRequestException(
+        `SMTP Login fehlgeschlagen: ${(error as Error)?.message ?? 'Unbekannter Fehler'}`,
+      );
+    } finally {
+      transport.close();
+    }
   }
 
   private mapToResponse(

@@ -16,6 +16,7 @@ import {
   type EmailAttachment,
   type EmailSendResult,
 } from '../../infra/mailer/email.service';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { ListCustomerMessagesDto } from './dto/list-customer-messages.dto';
@@ -95,14 +96,16 @@ export class CustomerMessagesService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly settingsService: SettingsService,
+    private readonly context: RequestContextService,
   ) {}
 
   async list(
     customerId: string,
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageListResponse> {
+    const tenantId = this.requireTenantId();
     const customer = await this.prisma.customer.findUnique({
-      where: { id: customerId },
+      where: { id: customerId, tenantId },
       include: { contacts: true },
     });
 
@@ -122,6 +125,7 @@ export class CustomerMessagesService {
 
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         OR: [
           { customerId },
           contactEmails.length ? { toEmail: { in: contactEmails } } : undefined,
@@ -164,8 +168,9 @@ export class CustomerMessagesService {
     customerId: string,
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
+    const tenantId = this.requireTenantId();
     const customer = await this.prisma.customer.findUnique({
-      where: { id: customerId },
+      where: { id: customerId, tenantId },
       include: { contacts: true },
     });
 
@@ -218,9 +223,10 @@ export class CustomerMessagesService {
 
     const saved = await this.prisma.customerMessage.create({
       data: {
-        customerId,
-        leadId: null,
-        contactId: contact?.id,
+        tenant: { connect: { id: tenantId } },
+        customer: { connect: { id: customerId } },
+        lead: undefined,
+        contact: contact ? { connect: { id: contact.id } } : undefined,
         direction: CustomerMessageDirection.OUTBOUND,
         status: CustomerMessageStatus.SENT,
         subject,
@@ -250,8 +256,9 @@ export class CustomerMessagesService {
     leadId: string,
     dto: ListCustomerMessagesDto,
   ): Promise<LeadMessageListResponse> {
+    const tenantId = this.requireTenantId();
     const lead = await this.prisma.lead.findUnique({
-      where: { id: leadId },
+      where: { id: leadId, tenantId },
     });
 
     if (!lead) {
@@ -271,6 +278,7 @@ export class CustomerMessagesService {
 
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         OR: orFilters,
       },
       include: { contact: true },
@@ -318,8 +326,9 @@ export class CustomerMessagesService {
     leadId: string,
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
+    const tenantId = this.requireTenantId();
     const lead = await this.prisma.lead.findUnique({
-      where: { id: leadId },
+      where: { id: leadId, tenantId },
     });
 
     if (!lead) {
@@ -362,9 +371,10 @@ export class CustomerMessagesService {
 
     const saved = await this.prisma.customerMessage.create({
       data: {
-        leadId,
-        customerId: null,
-        contactId: null,
+        tenant: { connect: { id: tenantId } },
+        lead: { connect: { id: leadId } },
+        customer: undefined,
+        contact: undefined,
         direction: CustomerMessageDirection.OUTBOUND,
         status: CustomerMessageStatus.SENT,
         subject,
@@ -393,9 +403,11 @@ export class CustomerMessagesService {
   async listSent(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
+    const tenantId = this.requireTenantId();
     const limit = Math.min(dto?.limit ?? 50, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         direction: CustomerMessageDirection.OUTBOUND,
         ...(dto.customerId && { customerId: dto.customerId }),
       },
@@ -409,9 +421,11 @@ export class CustomerMessagesService {
   async listInbox(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
+    const tenantId = this.requireTenantId();
     const limit = Math.min(dto?.limit ?? 50, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         direction: CustomerMessageDirection.INBOUND,
         ...(dto.customerId && { customerId: dto.customerId }),
       },
@@ -427,6 +441,7 @@ export class CustomerMessagesService {
   ): Promise<CustomerMessageResponse[]> {
     // TODO: Implement actual spam filtering
     const limit = Math.min(dto?.limit ?? 40, 200);
+    void this.requireTenantId();
     void limit;
 
     if (dto.customerId) {
@@ -441,9 +456,11 @@ export class CustomerMessagesService {
   async listUnassignedMessages(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
+    const tenantId = this.requireTenantId();
     const limit = Math.min(dto?.limit ?? 40, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         customerId: null,
         leadId: null,
       },
@@ -457,6 +474,7 @@ export class CustomerMessagesService {
   async sendUnassignedMessage(
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
+    const tenantId = this.requireTenantId();
     const toEmail = dto.toEmail?.trim().toLowerCase();
     if (!toEmail) {
       throw new BadRequestException(
@@ -492,9 +510,10 @@ export class CustomerMessagesService {
 
     const saved = await this.prisma.customerMessage.create({
       data: {
-        customerId: null,
-        leadId: null,
-        contactId: null,
+        tenant: { connect: { id: tenantId } },
+        customer: undefined,
+        lead: undefined,
+        contact: undefined,
         direction: CustomerMessageDirection.OUTBOUND,
         status: CustomerMessageStatus.SENT,
         subject,
@@ -521,6 +540,7 @@ export class CustomerMessagesService {
   }
 
   async listByEmail(email: string): Promise<CustomerMessageResponse[]> {
+    const tenantId = this.requireTenantId();
     const normalized = this.normalizeEmail(email);
     if (!normalized) {
       return [];
@@ -528,6 +548,7 @@ export class CustomerMessagesService {
 
     const records = await this.prisma.customerMessage.findMany({
       where: {
+        tenantId,
         OR: [{ toEmail: normalized }, { fromEmail: normalized }],
       },
       include: { contact: true },
@@ -566,6 +587,14 @@ export class CustomerMessagesService {
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
     };
+  }
+
+  private requireTenantId(): string {
+    const tenantId = this.context.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('Tenant-Kontext fehlt.');
+    }
+    return tenantId;
   }
 
   private buildLeadInitialMessage(lead: {
@@ -670,10 +699,12 @@ export class CustomerMessagesService {
     if (!uniqueIds.length) {
       return 0;
     }
+    const tenantId = this.requireTenantId();
 
     const result = await this.prisma.customerMessage.updateMany({
       where: {
         id: { in: uniqueIds },
+        tenantId,
         readAt: null,
       },
       data: {
@@ -685,8 +716,10 @@ export class CustomerMessagesService {
   }
 
   async getUnreadSummary() {
+    const tenantId = this.requireTenantId();
     const unassigned = await this.prisma.customerMessage.count({
       where: {
+        tenantId,
         customerId: null,
         leadId: null,
         direction: CustomerMessageDirection.INBOUND,
@@ -697,6 +730,7 @@ export class CustomerMessagesService {
     const leadGroups = await this.prisma.customerMessage.groupBy({
       by: ['leadId'],
       where: {
+        tenantId,
         leadId: { not: null },
         direction: CustomerMessageDirection.INBOUND,
         readAt: null,

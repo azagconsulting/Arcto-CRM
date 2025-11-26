@@ -8,6 +8,7 @@ export interface ImapCredentials {
   mailbox: string;
   encryption: ImapEncryption;
   sinceDays?: number;
+  verifiedAt?: string | null;
 }
 
 export interface ImapSettingsResponse {
@@ -19,4 +20,5 @@ export interface ImapSettingsResponse {
   hasPassword: boolean;
   sinceDays?: number;
   updatedAt: string;
+  verifiedAt?: string | null;
 }

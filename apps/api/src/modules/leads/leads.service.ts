@@ -1,9 +1,15 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { LeadPriority, LeadStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { EmailService } from '../../infra/mailer/email.service';
 import type { SmtpCredentials } from '../../common/interfaces/smtp-settings.interface';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import type { AuthUser } from '../auth/auth.types';
 import { SettingsService } from '../settings/settings.service';
 import { UsersService } from '../users/users.service';
@@ -26,18 +32,25 @@ export class LeadsService {
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
     private readonly settingsService: SettingsService,
+    private readonly context: RequestContextService,
   ) {}
 
   async createFromLanding(dto: CreateLeadDto) {
-    const settings = await this.ensureWorkflowSettings();
+    const tenantId = (await this.getTenantId()) ?? (await this.getDefaultTenantId());
+    if (!tenantId) {
+      throw new BadRequestException('Tenant für Lead-Erstellung fehlt.');
+    }
+
+    const settings = await this.ensureWorkflowSettings({ tenantId });
     const assignedTo = settings?.autoAssignUserId
       ? {
           connect: { id: settings.autoAssignUserId },
         }
       : undefined;
 
-    const lead = await this.prisma.lead.create({
+    const lead = (await this.prisma.lead.create({
       data: {
+        tenant: { connect: { id: tenantId } },
         fullName: dto.fullName,
         email: dto.email,
         company: dto.company,
@@ -51,10 +64,11 @@ export class LeadsService {
       include: {
         assignedTo: true,
       },
-    });
+    })) as LeadEntity;
 
     await this.prisma.leadUpdate.create({
       data: {
+        tenantId,
         leadId: lead.id,
         status: lead.status,
         note: 'Neue Anfrage über Landingpage',
@@ -124,6 +138,7 @@ export class LeadsService {
     if (dto.status || dto.note) {
       await this.prisma.leadUpdate.create({
         data: {
+          tenantId: existing.tenantId,
           leadId: updated.id,
           userId: actor?.sub ?? null,
           status: dto.status ?? updated.status,
@@ -162,14 +177,22 @@ export class LeadsService {
   async ensureWorkflowSettings(defaults?: {
     notifyEmail?: string;
     autoAssignUserId?: string;
+    tenantId?: string;
   }) {
+    const tenantId = defaults?.tenantId ?? (await this.getTenantId());
+    if (!tenantId) {
+      throw new BadRequestException('Tenant-Kontext fehlt.');
+    }
+
     let settings = await this.prisma.leadWorkflowSetting.findFirst({
       include: { autoAssignUser: true },
+      where: { tenantId },
     });
 
     if (!settings) {
       settings = await this.prisma.leadWorkflowSetting.create({
         data: {
+          tenantId,
           notifyEmail: defaults?.notifyEmail,
           routingHeadline: 'Kontaktaufnahme',
           routingDescription: 'Neue Leads landen direkt im Dashboard.',
@@ -191,11 +214,14 @@ export class LeadsService {
       await this.ensureUser(dto.autoAssignUserId);
     }
 
-    const existing = await this.prisma.leadWorkflowSetting.findFirst();
+    const existing = await this.prisma.leadWorkflowSetting.findFirst({
+      where: { tenantId: await this.getTenantId() },
+    });
     if (!existing) {
       return this.ensureWorkflowSettings({
         notifyEmail: dto.notifyEmail,
         autoAssignUserId: dto.autoAssignUserId ?? undefined,
+        tenantId: await this.getTenantId(),
       });
     }
 
@@ -442,5 +468,17 @@ export class LeadsService {
       throw new NotFoundException('User für Assignment nicht gefunden');
     }
     return user;
+  }
+
+  private async getTenantId(): Promise<string | undefined> {
+    return this.context.getTenantId();
+  }
+
+  private async getDefaultTenantId(): Promise<string | undefined> {
+    const tenant = await this.prisma.tenant.findFirst({
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return tenant?.id;
   }
 }

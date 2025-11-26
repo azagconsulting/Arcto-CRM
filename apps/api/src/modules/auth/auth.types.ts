@@ -8,6 +8,7 @@ export interface AuthTokens {
 
 export interface SanitizedUser {
   id: string;
+  tenantId: string;
   email: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -35,6 +36,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  tenantId: string;
 }
 
 export interface AuthUser extends JwtPayload {

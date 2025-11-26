@@ -17,6 +17,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <input
       ref={ref}
       type={type}
+      // Prevent password managers from injecting extra DOM that can cause hydration mismatches.
+      data-lpignore={props["data-lpignore"] ?? "true"}
+      data-1p-ignore={props["data-1p-ignore"] ?? "true"}
+      autoComplete={props.autoComplete ?? "off"}
       className={clsx(
         baseStyles,
         invalid && "border-rose-400/60 text-rose-100",

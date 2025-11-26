@@ -89,6 +89,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}) {
       cache: "no-store",
     });
   } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
     const message =
       err instanceof Error
         ? `API-Verbindung fehlgeschlagen: ${err.message}`
@@ -112,7 +115,21 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}) {
     return null as T;
   }
 
-  return (await response.json()) as T;
+  const raw = await response.text();
+  if (!raw.trim()) {
+    return null as T;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    throw new ApiError(
+      0,
+      err instanceof Error
+        ? `API-Response konnte nicht geparst werden: ${err.message}`
+        : 'API-Response konnte nicht geparst werden.',
+    );
+  }
 }
 
 export function authHeaders(token: string, headers?: HeadersInit) {

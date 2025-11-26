@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 
 import { EmailService } from '../../infra/mailer/email.service';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import type { SanitizedUser } from '../auth/auth.types';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -11,6 +12,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 interface CreateUserInput {
+  tenantId: string;
   email: string;
   passwordHash: string;
   firstName?: string;
@@ -23,6 +25,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly context: RequestContextService,
   ) {}
 
   findByEmail(email: string) {
@@ -38,6 +41,7 @@ export class UsersService {
   async create(input: CreateUserInput) {
     return this.prisma.user.create({
       data: {
+        tenantId: input.tenantId,
         email: input.email.toLowerCase(),
         passwordHash: input.passwordHash,
         firstName: input.firstName,
@@ -48,7 +52,9 @@ export class UsersService {
   }
 
   count() {
-    return this.prisma.user.count();
+    return this.prisma.user.count({
+      where: { tenantId: this.context.getTenantId() },
+    });
   }
 
   async touchLogin(id: string) {
@@ -62,6 +68,7 @@ export class UsersService {
 
   async listAssignableUsers() {
     return this.prisma.user.findMany({
+      where: { tenantId: this.context.getTenantId() },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -75,6 +82,7 @@ export class UsersService {
 
   async listEmployees(): Promise<SanitizedUser[]> {
     const users = await this.prisma.user.findMany({
+      where: { tenantId: this.context.getTenantId() },
       orderBy: { createdAt: 'desc' },
     });
     return users.map((user) => this.toSanitizedUser(user));
@@ -99,6 +107,7 @@ export class UsersService {
 
     const user = await this.prisma.user.create({
       data: {
+        tenantId: this.requireTenantId(),
         email: dto.email.toLowerCase(),
         passwordHash,
         firstName: dto.firstName,
@@ -199,6 +208,7 @@ export class UsersService {
   private toSanitizedUser(user: User): SanitizedUser {
     return {
       id: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -216,6 +226,14 @@ export class UsersService {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
     };
+  }
+
+  private requireTenantId(): string {
+    const tenantId = this.context.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('Kein Tenant-Kontext vorhanden.');
+    }
+    return tenantId;
   }
 
   private async sendInviteEmail(input: {

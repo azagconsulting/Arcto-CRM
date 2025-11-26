@@ -2,6 +2,7 @@ export type UserRole = "ADMIN" | "COORDINATOR" | "AGENT" | "VIEWER";
 
 export interface AuthUser {
   id: string;
+  tenantId: string;
   email: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -265,6 +266,7 @@ export interface ImapSettings {
   hasPassword: boolean;
   sinceDays?: number;
   updatedAt: string;
+  verifiedAt?: string | null;
 }
 
 export interface ApiSettings {

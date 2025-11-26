@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(191)
+  slug        String   @unique @db.VarChar(191)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users                User[]
+  leads                Lead[]
+  leadUpdates          LeadUpdate[]
+  leadWorkflowSettings LeadWorkflowSetting[]
+  customers            Customer[]
+  customerMessages     CustomerMessage[]
+  tenantSettings       TenantSetting[]
+}
+
 enum UserRole {
   ADMIN
   COORDINATOR
@@ -70,6 +87,7 @@ enum MessageCategory {
 
 model User {
   id           String     @id @default(uuid())
+  tenantId     String
   email        String     @unique @db.VarChar(191)
   passwordHash String     @db.VarChar(255)
   firstName    String?    @db.VarChar(120)
@@ -89,14 +107,18 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignedLeads    Lead[]               @relation("LeadAssignee")
   leadUpdates      LeadUpdate[]
   workflowSettings LeadWorkflowSetting[] @relation("LeadWorkflowSettingsAutoAssign")
   blogPosts        BlogPost[]
+
+  @@index([tenantId])
 }
 
 model Lead {
   id            String       @id @default(uuid())
+  tenantId      String
   fullName      String       @db.VarChar(191)
   email         String       @db.VarChar(191)
   company       String?      @db.VarChar(191)
@@ -112,6 +134,7 @@ model Lead {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignedTo User?       @relation("LeadAssignee", fields: [assignedToId], references: [id])
   updates     LeadUpdate[]
   messages    CustomerMessage[]
@@ -119,24 +142,29 @@ model Lead {
   @@index([status])
   @@index([assignedToId])
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 model LeadUpdate {
   id        String     @id @default(uuid())
+  tenantId  String
   leadId    String
   userId    String?
   status    LeadStatus
   note      String?    @db.VarChar(255)
   createdAt DateTime   @default(now())
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead Lead @relation(fields: [leadId], references: [id])
   user User? @relation(fields: [userId], references: [id])
 
   @@index([leadId, createdAt])
+  @@index([tenantId])
 }
 
 model LeadWorkflowSetting {
   id                    String   @id @default(uuid())
+  tenantId              String
   autoAssignUserId      String?
   notifyEmail           String?  @db.VarChar(191)
   autoResponderEnabled  Boolean  @default(false)
@@ -146,7 +174,10 @@ model LeadWorkflowSetting {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   autoAssignUser User? @relation("LeadWorkflowSettingsAutoAssign", fields: [autoAssignUserId], references: [id])
+
+  @@index([tenantId])
 }
 
 model BlogPost {
@@ -172,6 +203,7 @@ model BlogPost {
 
 model Customer {
   id               String              @id @default(uuid())
+  tenantId         String
   name             String              @db.VarChar(191)
   segment          CustomerSegment     @default(SCALE)
   ownerName        String?             @db.VarChar(191)
@@ -187,9 +219,12 @@ model Customer {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contacts   CustomerContact[]
   activities CustomerActivity[]
   messages   CustomerMessage[]
+
+  @@index([tenantId])
 }
 
 model CustomerContact {
@@ -227,6 +262,7 @@ model CustomerActivity {
 
 model CustomerMessage {
   id          String                  @id @default(uuid())
+  tenantId    String
   customerId  String?
   leadId      String?
   contactId   String?
@@ -252,6 +288,7 @@ model CustomerMessage {
   summary     String?                 @db.VarChar(512)
   analyzedAt  DateTime?
 
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer?       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   lead     Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
   contact  CustomerContact? @relation(fields: [contactId], references: [id])
@@ -260,12 +297,19 @@ model CustomerMessage {
   @@index([contactId])
   @@index([leadId, createdAt])
   @@index([analyzedAt])
+  @@index([tenantId])
 }
 
-model SystemSetting {
+model TenantSetting {
   id        String   @id @default(uuid())
-  key       String   @unique @db.VarChar(191)
+  tenantId  String
+  key       String   @db.VarChar(191)
   value     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }

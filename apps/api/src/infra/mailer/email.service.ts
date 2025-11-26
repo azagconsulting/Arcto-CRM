@@ -114,9 +114,9 @@ export class EmailService {
     const mailOptions: SendMailOptions = {
       ...payload,
       from:
-        payload.from ??
-        credentials.fromEmail ??
-        credentials.username ??
+        credentials.fromEmail ||
+        credentials.username ||
+        payload.from ||
         this.defaultSender,
     };
     // nodemailer typings return `any` here; assert expected response shape
@@ -131,11 +131,13 @@ export class EmailService {
     const smtpOptions: SMTPTransport.Options = {
       host: credentials.host,
       port: credentials.port,
-      secure: credentials.port === 465, // true for 465, false for other ports
+      secure: credentials.encryption === 'ssl' || credentials.port === 465,
+      requireTLS: credentials.encryption === 'tls',
       auth: {
         user: credentials.username,
         pass: credentials.password,
       },
+      tls: credentials.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
     };
     return nodemailer.createTransport<SentMessageInfo>(smtpOptions);
   }

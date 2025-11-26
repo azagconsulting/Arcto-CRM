@@ -86,6 +86,7 @@ export default function MessagesWorkspacePage() {
 
   const [smtpReady, setSmtpReady] = useState(true);
   const [smtpStatus, setSmtpStatus] = useState<string | null>(null);
+  const [openAiEnabled, setOpenAiEnabled] = useState<boolean | null>(null);
   const [unreadSummary, setUnreadSummary] = useState<{ leads: Record<string, number>; unassigned: number; total: number }>({ leads: {}, unassigned: 0, total: 0 });
   const [locallyReadIds, setLocallyReadIds] = useState<Set<string>>(new Set());
 
@@ -201,6 +202,9 @@ export default function MessagesWorkspacePage() {
         setSmtpReady(true);
         setSmtpStatus(null);
       }
+
+      const aiFlag = await authorizedRequest<{ enabled: boolean }>("/settings/ai-enabled").catch(() => null);
+      setOpenAiEnabled(aiFlag?.enabled ?? null);
     } catch (err) {
       setError("Daten konnten nicht geladen werden.");
       console.error(err);
@@ -243,33 +247,50 @@ export default function MessagesWorkspacePage() {
     const messagesToAnalyze = [
       ...inboxMessages,
       ...unassignedMessages,
-    ].filter(msg => msg && !msg.analyzedAt && isUuid(msg.id));
+    ].filter((msg) => msg && !msg.analyzedAt && isUuid(msg.id));
 
     if (!messagesToAnalyze.length || isUpdatingRef.current) return;
 
     isUpdatingRef.current = true;
 
     (async () => {
-      const results = await Promise.allSettled(
-        messagesToAnalyze.map(msg => 
-          authorizedRequest<CustomerMessage>(`/messages/${msg.id}/analyze`, { method: 'POST' })
-            .catch(e => {
+      try {
+        const results = await Promise.allSettled(
+          messagesToAnalyze.map((msg) =>
+            authorizedRequest<CustomerMessage>(`/messages/${msg.id}/analyze`, {
+              method: "POST",
+            }).catch((e) => {
               console.error(`Analyzing message ${msg.id} failed`, e);
               return null;
-            })
-        )
-      );
+            }),
+          ),
+        );
 
-      const updatedAnalyzedMessages = results
-        .filter(res => res.status === 'fulfilled' && res.value)
-        .map(res => (res as PromiseFulfilledResult<CustomerMessage>).value);
+        const updatedAnalyzedMessages = results
+          .filter((res) => res.status === "fulfilled" && res.value)
+          .map((res) => (res as PromiseFulfilledResult<CustomerMessage>).value);
 
-      if (updatedAnalyzedMessages.length > 0) {
-        setInboxMessages(prev => prev.map(msg => updatedAnalyzedMessages.find(uMsg => uMsg.id === msg.id) || msg));
-        setUnassignedMessages(prev => prev.map(msg => updatedAnalyzedMessages.find(uMsg => uMsg.id === msg.id) || msg));
+        if (updatedAnalyzedMessages.length > 0) {
+          setInboxMessages((prev) =>
+            prev.map(
+              (msg) =>
+                updatedAnalyzedMessages.find((uMsg) => uMsg.id === msg.id) ||
+                msg,
+            ),
+          );
+          setUnassignedMessages((prev) =>
+            prev.map(
+              (msg) =>
+                updatedAnalyzedMessages.find((uMsg) => uMsg.id === msg.id) ||
+                msg,
+            ),
+          );
+        }
+      } catch (e) {
+        console.error("Batch analyze failed", e);
+      } finally {
+        isUpdatingRef.current = false;
       }
-      
-      isUpdatingRef.current = false;
     })();
   }, [unassignedMessages, inboxMessages, authorizedRequest]);
   
@@ -762,6 +783,7 @@ export default function MessagesWorkspacePage() {
             activeMailbox={activeMailbox}
             onMailboxChange={handleMailboxChange}
             unreadCounts={{ leads: Object.values(unreadSummary.leads).reduce((a, b) => a + b, 0), unassigned: unreadSummary.unassigned }}
+            onOpenSettings={() => router.push("/settings")}
           />
 
           <div className="h-full">

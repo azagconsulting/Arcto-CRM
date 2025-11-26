@@ -47,7 +47,10 @@ package.json  # zentrale npm-Skripte für beide Workspaces
    npx prisma migrate dev --name init
    npx prisma generate
    cd ../..
+   npx prisma migrate reset --force
    ```
+
+
 4. (Optional) Infrastruktur per Docker starten:
    ```bash
    docker compose up -d db redis mailhog

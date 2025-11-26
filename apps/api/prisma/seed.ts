@@ -5,7 +5,9 @@ import {
   CustomerMessageStatus,
   CustomerSegment,
   PrismaClient,
+  UserRole,
 } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -64,6 +66,32 @@ async function main() {
   await prisma.customerActivity.deleteMany();
   await prisma.customerContact.deleteMany();
   await prisma.customer.deleteMany();
+  await prisma.leadUpdate.deleteMany();
+  await prisma.lead.deleteMany();
+  await prisma.leadWorkflowSetting.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.tenantSetting.deleteMany();
+  await prisma.tenant.deleteMany();
+
+  const tenant = await prisma.tenant.create({
+    data: {
+      name: 'Arcto Demo',
+      slug: 'arcto-demo',
+      description: 'Demo-Tenant für lokale Entwicklung',
+    },
+  });
+
+  const adminPasswordHash = await bcrypt.hash('changeme123', 12);
+  await prisma.user.create({
+    data: {
+      tenant: { connect: { id: tenant.id } },
+      email: 'admin@arcto.app',
+      passwordHash: adminPasswordHash,
+      firstName: 'Demo',
+      lastName: 'Admin',
+      role: UserRole.ADMIN,
+    },
+  });
 
   const customers: SeedCustomer[] = [
     {
@@ -330,14 +358,15 @@ async function main() {
     },
   ];
 
-  for (const entry of customers) {
+    for (const entry of customers) {
     const created = await prisma.customer.create({
       data: {
-        name: entry.name,
-        segment: entry.segment,
-        ownerName: entry.ownerName,
-        region: entry.region,
-        health: entry.health,
+          tenant: { connect: { id: tenant.id } },
+          name: entry.name,
+          segment: entry.segment,
+          ownerName: entry.ownerName,
+          region: entry.region,
+          health: entry.health,
         mrrCents: entry.mrrCents,
         lastContactAt: entry.lastContactAt,
         nextStep: entry.nextStep,
@@ -358,14 +387,15 @@ async function main() {
     });
 
     for (const message of entry.messages ?? []) {
-      const contact = message.contact
-        ? created.contacts.find((item) => item.name === message.contact)
-        : null;
+          const contact = message.contact
+            ? created.contacts.find((item) => item.name === message.contact)
+            : null;
 
       await prisma.customerMessage.create({
         data: {
-          customerId: created.id,
-          contactId: contact?.id,
+          tenant: { connect: { id: tenant.id } },
+          customer: { connect: { id: created.id } },
+          contact: contact ? { connect: { id: contact.id } } : undefined,
           direction: message.direction,
           status: CustomerMessageStatus.SENT,
           subject: message.subject,

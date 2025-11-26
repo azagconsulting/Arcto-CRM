@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { RequestContextService } from '../../infra/request-context/request-context.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateCustomerActivityDto } from './dto/create-customer-activity.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
@@ -88,10 +89,14 @@ export interface CustomerImportResult {
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly context: RequestContextService,
+  ) {}
 
   async listCustomers(dto: ListCustomersDto): Promise<CustomerListResponse> {
-    const where: Prisma.CustomerWhereInput = {};
+    const tenantId = this.requireTenantId();
+    const where: Prisma.CustomerWhereInput = { tenantId };
 
     if (dto.segment) {
       where.segment = dto.segment;
@@ -138,6 +143,7 @@ export class CustomersService {
   async createCustomer(dto: CreateCustomerDto): Promise<CustomerResponse> {
     const customer = await this.prisma.customer.create({
       data: {
+        tenantId: this.requireTenantId(),
         name: dto.name.trim(),
         segment: dto.segment,
         ownerName: dto.ownerName?.trim() || undefined,
@@ -183,6 +189,7 @@ export class CustomersService {
     id: string,
     dto: UpdateCustomerDto,
   ): Promise<CustomerResponse> {
+    const tenantId = this.requireTenantId();
     const data: Prisma.CustomerUpdateInput = {};
 
     if (dto.name !== undefined) {
@@ -228,11 +235,13 @@ export class CustomersService {
 
     if (Object.keys(data).length > 0) {
       await this.prisma.customer.update({
-        where: { id },
+        where: { id, tenantId },
         data,
       });
     } else {
-      await this.prisma.customer.findUniqueOrThrow({ where: { id } });
+      await this.prisma.customer.findUniqueOrThrow({
+        where: { id, tenantId },
+      });
     }
 
     await this.upsertPrimaryContact(id, dto.primaryContact);
@@ -241,8 +250,9 @@ export class CustomersService {
   }
 
   async findCustomer(id: string): Promise<CustomerResponse> {
+    const tenantId = this.requireTenantId();
     const customer = await this.prisma.customer.findUnique({
-      where: { id },
+      where: { id, tenantId },
       include: {
         contacts: {
           orderBy: { createdAt: 'asc' },
@@ -261,7 +271,8 @@ export class CustomersService {
   }
 
   async deleteCustomer(id: string): Promise<void> {
-    await this.prisma.customer.delete({ where: { id } });
+    const tenantId = this.requireTenantId();
+    await this.prisma.customer.delete({ where: { id, tenantId } });
   }
 
   async logCustomerActivity(
@@ -269,7 +280,7 @@ export class CustomersService {
     dto: CreateCustomerActivityDto,
   ): Promise<CustomerActivityResponse> {
     await this.prisma.customer.findUniqueOrThrow({
-      where: { id: customerId },
+      where: { id: customerId, tenantId: this.requireTenantId() },
       select: { id: true },
     });
 
@@ -363,6 +374,7 @@ export class CustomersService {
 
         await this.prisma.customer.create({
           data: {
+            tenantId: this.requireTenantId(),
             name: name.trim(),
             segment,
             ownerName:
@@ -483,6 +495,14 @@ export class CustomersService {
     }
 
     return tags.filter((tag): tag is string => typeof tag === 'string');
+  }
+
+  private requireTenantId(): string {
+    const tenantId = this.context.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('Tenant-Kontext fehlt.');
+    }
+    return tenantId;
   }
 
   private async upsertPrimaryContact(

@@ -12,9 +12,15 @@ interface MailboxSidebarProps {
     leads: number;
     unassigned: number;
   };
+  onOpenSettings?: () => void;
 }
 
-export function MailboxSidebar({ activeMailbox, onMailboxChange, unreadCounts }: MailboxSidebarProps) {
+export function MailboxSidebar({
+  activeMailbox,
+  onMailboxChange,
+  unreadCounts,
+  onOpenSettings,
+}: MailboxSidebarProps) {
   const mailboxes: { id: Mailbox; label: string; unread: number, icon: React.ElementType }[] = [
     { id: "inbox", label: "Posteingang", unread: unreadCounts.leads + unreadCounts.unassigned, icon: Inbox },
     { id: "sent", label: "Gesendet", unread: 0, icon: Send },
@@ -45,6 +51,16 @@ export function MailboxSidebar({ activeMailbox, onMailboxChange, unreadCounts }:
           )}
         </button>
       ))}
+      {onOpenSettings && (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-300 hover:bg-white/5"
+        >
+          <Inbox className="h-5 w-5" />
+          <span className="flex-1">Einstellungen</span>
+        </button>
+      )}
     </div>
   );
 }

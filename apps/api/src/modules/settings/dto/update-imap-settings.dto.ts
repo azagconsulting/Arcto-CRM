@@ -43,4 +43,14 @@ export class UpdateImapSettingsDto {
   @Min(0)
   @Max(365)
   sinceDays?: number;
+
+  // Allow ignored client flags
+  @IsOptional()
+  hasPassword?: boolean;
+
+  @IsOptional()
+  updatedAt?: string;
+
+  @IsOptional()
+  verifiedAt?: string;
 }

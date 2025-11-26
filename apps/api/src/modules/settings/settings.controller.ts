@@ -5,6 +5,7 @@ import { UpdateImapSettingsDto } from './dto/update-imap-settings.dto';
 import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto';
 import { UpdateApiSettingsDto } from './dto/update-api-settings.dto';
 import { SettingsService } from './settings.service';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller({
   path: 'settings',
@@ -51,5 +52,11 @@ export class SettingsController {
   @Put('api')
   updateApiSettings(@Body() dto: UpdateApiSettingsDto) {
     return this.settingsService.updateApiSettings(dto);
+  }
+
+  @Public()
+  @Get('ai-enabled')
+  aiEnabled() {
+    return { enabled: Boolean(process.env.OPENAI_API_KEY) };
   }
 }

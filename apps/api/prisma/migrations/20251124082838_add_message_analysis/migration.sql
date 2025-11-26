@@ -10,8 +10,7 @@ ALTER TABLE `customermessage` ADD COLUMN `analyzedAt` DATETIME(3) NULL,
     ADD COLUMN `sentiment` VARCHAR(64) NULL,
     ADD COLUMN `summary` VARCHAR(512) NULL,
     ADD COLUMN `urgency` VARCHAR(64) NULL,
-    MODIFY `status` ENUM('DRAFT', 'QUEUED', 'SENDING', 'SENT', 'FAILED') NOT NULL DEFAULT 'SENT',
-    MODIFY `readAt` DATETIME(3) NULL;
+    MODIFY `status` ENUM('DRAFT', 'QUEUED', 'SENDING', 'SENT', 'FAILED') NOT NULL DEFAULT 'SENT';
 
 -- CreateIndex
 CREATE INDEX `CustomerMessage_analyzedAt_idx` ON `CustomerMessage`(`analyzedAt`);
