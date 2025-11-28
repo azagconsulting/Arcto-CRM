@@ -22,16 +22,9 @@ const SESSION_KEY = "arcto-tracking-session";
 
 function isMarketingPath(pathname: string) {
   const normalized = pathname || "/";
-  const disallowed = [
-    "/dashboard",
-    "/workspace",
-    "/customers",
-    "/settings",
-    "/help",
-    "/mitarbeiter",
-    "/api",
-  ];
-  return !disallowed.some((prefix) => normalized.startsWith(prefix));
+  if (normalized === "/") return true;
+  if (normalized.startsWith("/blog")) return true;
+  return false;
 }
 
 function getStoredSession() {

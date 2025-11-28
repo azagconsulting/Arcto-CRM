@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { OPENAI_KEY_STORAGE, SERPAPI_KEY_STORAGE } from "@/lib/constants";
+import {
+  OPENAI_KEY_STORAGE,
+  SERPAPI_KEY_STORAGE,
+  WORKSPACE_NAME_STORAGE,
+} from "@/lib/constants";
 import type {
   ApiSettings,
   ImapEncryption,
@@ -25,9 +29,7 @@ type SettingsTab =
   | "workspace"
   | "ai"
   | "email"
-  | "notifications"
-  | "api"
-  | "help";
+  | "notifications";
 
 type ProfileForm = {
   firstName: string;
@@ -223,7 +225,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const tab = searchParams?.get("tab");
-    if (tab && ["profile", "workspace", "ai", "email", "notifications", "api"].includes(tab)) {
+    if (tab && ["profile", "workspace", "ai", "email", "notifications"].includes(tab)) {
       setActiveTab(tab as SettingsTab);
     }
   }, [searchParams]);
@@ -325,10 +327,38 @@ export default function SettingsPage() {
     setWorkspaceSaving(true);
     setWorkspaceNotice(null);
     try {
+      const trimmed = (value?: string | null) => value?.trim() || undefined;
       const payload = {
-        ...workspaceForm,
-        foundedYear: workspaceForm.foundedYear ? Number(workspaceForm.foundedYear) : null,
-        teamSize: workspaceForm.teamSize ? Number(workspaceForm.teamSize) : null,
+        companyName: trimmed(workspaceForm.companyName),
+        legalName: trimmed(workspaceForm.legalName),
+        industry: trimmed(workspaceForm.industry),
+        tagline: trimmed(workspaceForm.tagline),
+        mission: trimmed(workspaceForm.mission),
+        vision: trimmed(workspaceForm.vision),
+        description: trimmed(workspaceForm.description),
+        foundedYear: workspaceForm.foundedYear ? Number(workspaceForm.foundedYear) : undefined,
+        teamSize: workspaceForm.teamSize ? Number(workspaceForm.teamSize) : undefined,
+        supportEmail: trimmed(workspaceForm.supportEmail),
+        supportPhone: trimmed(workspaceForm.supportPhone),
+        timezone: trimmed(workspaceForm.timezone),
+        currency: trimmed(workspaceForm.currency),
+        vatNumber: trimmed(workspaceForm.vatNumber),
+        registerNumber: trimmed(workspaceForm.registerNumber),
+        street: trimmed(workspaceForm.address?.street),
+        postalCode: trimmed(workspaceForm.address?.postalCode),
+        city: trimmed(workspaceForm.address?.city),
+        country: trimmed(workspaceForm.address?.country),
+        primaryColor: trimmed(workspaceForm.branding?.primaryColor),
+        secondaryColor: trimmed(workspaceForm.branding?.secondaryColor),
+        accentColor: trimmed(workspaceForm.branding?.accentColor),
+        logoUrl: trimmed(workspaceForm.branding?.logoUrl),
+        coverImageUrl: trimmed(workspaceForm.branding?.coverImageUrl),
+        website: trimmed(workspaceForm.social?.website),
+        linkedin: trimmed(workspaceForm.social?.linkedin),
+        twitter: trimmed(workspaceForm.social?.twitter),
+        facebook: trimmed(workspaceForm.social?.facebook),
+        instagram: trimmed(workspaceForm.social?.instagram),
+        youtube: trimmed(workspaceForm.social?.youtube),
       };
       const response = await authorizedRequest<WorkspaceSettings>("/settings/workspace", {
         method: "PUT",
@@ -337,6 +367,20 @@ export default function SettingsPage() {
       });
       setWorkspaceForm(response);
       setWorkspaceNotice("Unternehmensprofil gespeichert.");
+
+      if (typeof window !== "undefined") {
+        const name = response.companyName?.trim() || response.legalName?.trim() || null;
+        if (name) {
+          window.localStorage.setItem(WORKSPACE_NAME_STORAGE, name);
+        } else {
+          window.localStorage.removeItem(WORKSPACE_NAME_STORAGE);
+        }
+        window.dispatchEvent(
+          new CustomEvent("workspace-settings-updated", {
+            detail: { companyName: response.companyName, legalName: response.legalName },
+          }),
+        );
+      }
     } catch (err) {
       setWorkspaceNotice(err instanceof Error ? err.message : "Unternehmensprofil konnte nicht gespeichert werden.");
     } finally {
@@ -459,9 +503,7 @@ export default function SettingsPage() {
           { key: "workspace", label: "Unternehmensprofil" },
           { key: "ai", label: "AI & Search Keys" },
           { key: "email", label: "E-Mail Einstellungen" },
-          { key: "api", label: "API & Integrationen" },
           { key: "notifications", label: "Benachrichtigungen" },
-          { key: "help", label: "Hilfecenter" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -859,174 +901,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeTab === "help" && (
-        <div className="grid gap-4 lg:grid-cols-[280px,1fr]">
-          <div className="space-y-3 rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-4 text-sm text-slate-200">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Schnellzugriff</p>
-            <div className="space-y-2">
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setActiveTab("email")}>
-                E-Mail-Einstellungen öffnen
-              </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setActiveTab("ai")}>
-                OpenAI-Key hinterlegen
-              </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setActiveTab("api")}>
-                API & Integrationen
-              </Button>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-              <p className="font-semibold text-white">Häufige Fragen</p>
-              <ul className="mt-2 space-y-1 list-disc pl-4">
-                <li>Gmail mit App-Passwort (2FA Pflicht)</li>
-                <li>Absender-Fehler 550 beheben</li>
-                <li>Warum kein KI-Badge? (Key fehlt)</li>
-              </ul>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <Card title="Gmail mit App-Passwort" description="So klappt IMAP/SMTP mit Google.">
-              <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-200">
-                <li>IMAP in Gmail aktivieren (Einstellungen → Weiterleitung/POP-IMAP).</li>
-                <li>2FA aktivieren.</li>
-                <li>App-Passwort erstellen: myaccount.google.com/apppasswords → App „Mail“, Gerät „Sonstiges“ (z. B. „Arcto CRM").</li>
-                <li>IMAP: Host imap.gmail.com, Port 993, SSL; Benutzer = Gmail-Adresse; Passwort = App-Passwort.</li>
-                <li>SMTP: Host smtp.gmail.com, Port 465 (ssl) oder 587 (tls); Benutzer = Gmail-Adresse; Passwort = App-Passwort; Absender aus Gmail-Domain.</li>
-                <li>Fehler „Application-specific password required“ → App-Passwort prüfen oder Captcha-Freigabe: https://accounts.google.com/DisplayUnlockCaptcha.</li>
-              </ol>
-            </Card>
-
-            <Card title="GMX / Web.de" description="IMAP/SMTP Einstellungen">
-              <ul className="list-disc space-y-2 pl-5 text-sm text-slate-200">
-                <li>IMAP ggf. im Postfach aktivieren.</li>
-                <li>IMAP: imap.gmx.net, Port 993, SSL. SMTP: mail.gmx.net, Port 465 (ssl) oder 587 (tls).</li>
-                <li>Benutzer = volle Mailadresse, Passwort = Login-Passwort; Absender zur Domain passend wählen.</li>
-              </ul>
-            </Card>
-
-            <Card title="Typische Fehlermeldungen" description="Schnell lösen">
-              <ul className="space-y-2 text-sm text-slate-200">
-                <li><span className="font-semibold text-white">AUTHENTICATIONFAILED / App-Passwort nötig:</span> Bei Gmail immer ein App-Passwort nutzen.</li>
-                <li><span className="font-semibold text-white">550 Sender address is not allowed:</span> Absender-Domain vom SMTP-Anbieter blockiert → Absender auf passende Domain ändern.</li>
-                <li><span className="font-semibold text-white">Kein „Zugriff verifiziert“:</span> Login-Test fehlgeschlagen → Host/Port/Passwort prüfen, IMAP aktivieren, ggf. Captcha-Freigabe.</li>
-              </ul>
-            </Card>
-
-            <Card title="KI-Analyse" description="Wann Analysen laufen">
-              <ul className="list-disc space-y-2 pl-5 text-sm text-slate-200">
-                <li>OpenAI-Key unter „AI & Search Keys“ hinterlegen.</li>
-                <li>Ohne Key kein KI-Badge und keine Analyse.</li>
-                <li>Max. die letzten 5 eingehenden Nachrichten pro Tenant werden analysiert; nach 14 Tagen werden Mails (inkl. Analyse) gelöscht.</li>
-              </ul>
-            </Card>
-          </div>
-        </div>
-      )}
-{activeTab === "api" && (
-        <div className="space-y-4">
-          <Card
-            title="API & Integrationen"
-            description="Eigenes Tracking nutzen oder Google Analytics einbetten."
-          >
-            <form className="space-y-4" onSubmit={handleApiSave}>
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Tracking</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {trackingModeOptions.map((option) => {
-                    const active = apiSettings.trackingMode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setApiSettings((current) => ({ ...current, trackingMode: option.value }))}
-                        className={clsx(
-                          "w-full rounded-2xl border px-4 py-3 text-left transition",
-                          active
-                            ? "border-white/40 bg-white/10 text-white shadow-[0_10px_30px_rgba(15,23,42,0.35)]"
-                            : "border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10",
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold">{option.title}</p>
-                          {active ? (
-                            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-200">
-                              Aktiv
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="text-xs text-slate-400">{option.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {isGaMode ? (
-                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                  GA-Integration aktiv. Nutze Embed/Service-Account unten oder wechsle zurück auf eigenes Tracking.
-                </p>
-              ) : (
-                <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                  Eigenes Tracking aktiv. Dashboard nutzt Arcto-Events; GA-Felder sind deaktiviert.
-                </p>
-              )}
-
-              <fieldset className={clsx("space-y-4 rounded-2xl p-1", !isGaMode && "pointer-events-none opacity-60")}>
-                <label className="block text-sm text-slate-300">
-                  GA Embed / Iframe URL
-                  <Input
-                    className="mt-2"
-                    value={apiSettings.embedUrl ?? ""}
-                    onChange={(e) => setApiSettings({ ...apiSettings, embedUrl: e.target.value })}
-                    placeholder="https://analytics.google.com/..."
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  API Token (optional)
-                  <Input
-                    type="password"
-                    className="mt-2"
-                    value={apiSettings.apiToken ?? ""}
-                    onChange={(e) => setApiSettings({ ...apiSettings, apiToken: e.target.value })}
-                    placeholder="Service-Account oder OAuth Token"
-                  />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  Service-Account JSON hochladen
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    className="mt-2 w-full text-sm text-slate-200 file:mr-3 file:rounded-xl file:border file:border-white/10 file:bg-white/5 file:px-3 file:py-2 file:text-slate-200 hover:file:bg-white/10"
-                    onChange={async (event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      try {
-                        const text = await file.text();
-                        setApiSettings((current) => ({ ...current, serviceAccountJson: text }));
-                        setApiStatus("Service-Account geladen – speichern, um zu übernehmen.");
-                      } catch (err) {
-                        setApiStatus("Datei konnte nicht gelesen werden.");
-                      }
-                    }}
-                  />
-                </label>
-              </fieldset>
-
-              <p className="text-xs text-slate-500">
-                Für OAuth/Service-Account: GA Reporting API mit Mess-ID/Property-ID nutzen. Embed läuft per Iframe,
-                API-Zugriff erfolgt über das gespeicherte Service-Account-JSON und Token (Analyse-Calls folgen).
-              </p>
-              <Button size="sm" type="submit" disabled={apiSaving}>
-                {apiSaving ? "Speichern…" : "Speichern"}
-              </Button>
-              {apiStatus && <p className="text-xs text-emerald-300">{apiStatus}</p>}
-              {apiSettings.hasServiceAccount && (
-                <p className="text-xs text-emerald-200">Service-Account hinterlegt.</p>
-              )}
-              {apiSettings.updatedAt && <p className="text-xs text-slate-400">Aktualisiert: {apiSettings.updatedAt}</p>}
-            </form>
-          </Card>
-        </div>
-      )}
     </section>
   );
 }

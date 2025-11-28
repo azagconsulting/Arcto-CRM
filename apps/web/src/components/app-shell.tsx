@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
+  TrendingUp,
   LifeBuoy,
   LogOut,
   Menu,
@@ -28,6 +29,8 @@ import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { clsx } from "clsx";
+import { WORKSPACE_NAME_STORAGE } from "@/lib/constants";
+import type { WorkspaceSettings } from "@/lib/types";
 
 type NavigationIcon = typeof LayoutDashboard;
 
@@ -57,28 +60,34 @@ const navigationBase: NavigationItem[] = [
     description: "Schneller Überblick über Leads und Aktivitäten",
   },
   {
-    title: "Kunden",
-    href: "/customers",
-    icon: Users,
-    description: "Accounts, Beziehungen und Health",
-  },
-  {
     title: "Mitarbeiter",
     href: "/mitarbeiter",
     icon: UserCog,
     description: "People Ops, Kapazität und Hiring im Blick",
   },
   {
+    title: "Kunden",
+    href: "/customers",
+    icon: Users,
+    description: "Accounts, Beziehungen und Health",
+  },
+  {
+    title: "Nachrichten",
+    href: "/workspace/messages",
+    icon: MessageSquare,
+    description: "Inbox & E-Mails mit Kunden",
+  },
+  {
+    title: "Tracking",
+    href: "/tracking",
+    icon: TrendingUp,
+    description: "Analyse von Pageviews, CTR und Verweildauer",
+  },
+  {
     title: "Blog",
     href: "/workspace/blog",
     icon: Newspaper,
     description: "Beiträge verfassen und veröffentlichen",
-  },
-  {
-    title: "Messages",
-    href: "/workspace/messages",
-    icon: MessageSquare,
-    description: "Inbox & E-Mails mit Kunden",
   },
   {
     title: "KI Tool",
@@ -120,22 +129,17 @@ const footerNavigation: NavigationItem[] = [
     icon: Settings,
     description: "Branding, Bereiche und Automationen verwalten",
   },
-  {
-    title: "Hilfscenter",
-    href: "/help",
-    icon: LifeBuoy,
-    description: "Guides, Support & FAQ",
-  },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, authorizedRequest } = useAuth();
   const [messagesBadge, setMessagesBadge] = useState(0);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const displayName = user?.firstName ? `${user.firstName} ${user.lastName ?? ""}`.trim() : user?.email;
   const avatarInitials = useMemo(() => {
     if (user?.firstName || user?.lastName) {
@@ -197,6 +201,74 @@ export function AppShell({ children }: { children: ReactNode }) {
     setOpenDropdown(null);
   }, [pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const stored = window.localStorage.getItem(WORKSPACE_NAME_STORAGE)?.trim() || null;
+    if (stored) {
+      setWorkspaceName(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setWorkspaceName(null);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    authorizedRequest<WorkspaceSettings | null>("/settings/workspace", { signal: controller.signal })
+      .then((settings) => {
+        if (!active || !settings) return;
+        const name = settings.companyName?.trim() || settings.legalName?.trim() || null;
+        setWorkspaceName(name);
+        if (typeof window !== "undefined" && name) {
+          window.localStorage.setItem(WORKSPACE_NAME_STORAGE, name);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authorizedRequest, user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleWorkspaceUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ companyName?: string | null; legalName?: string | null }>).detail;
+      if (!detail) return;
+      const nextName = detail.companyName?.trim() || detail.legalName?.trim() || null;
+      setWorkspaceName(nextName);
+      if (nextName) {
+        window.localStorage.setItem(WORKSPACE_NAME_STORAGE, nextName);
+      } else {
+        window.localStorage.removeItem(WORKSPACE_NAME_STORAGE);
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === WORKSPACE_NAME_STORAGE) {
+        setWorkspaceName(event.newValue?.trim() || null);
+      }
+    };
+
+    window.addEventListener("workspace-settings-updated", handleWorkspaceUpdate as EventListener);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("workspace-settings-updated", handleWorkspaceUpdate as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  const workspaceDisplayName = workspaceName?.trim() || "Arcto Labs";
+
   const isItemActive = (item: NavigationItem) => {
     if (item.children?.length) {
       return item.children.some((child) => pathname.startsWith(child.href));
@@ -219,7 +291,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }}
       >
         <div className={clsx("relative flex items-center justify-between gap-3", sidebarCollapsed && "flex-col")}>
-          {!sidebarCollapsed && <Logo className="text-[var(--text-primary)]" href="/dashboard" />}
+          {!sidebarCollapsed && <Logo className="text-[var(--text-primary)]" href="/dashboard" label={workspaceDisplayName} />}
           {sidebarCollapsed && (
             <div className="relative flex flex-col items-center gap-2">
               <Logo className="text-[var(--text-primary)]" href="/dashboard" size={40} showText={false} />
@@ -502,7 +574,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {!sidebarCollapsed && (
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-[var(--text-secondary)]">Workspace</p>
-                  <p className="text-lg font-semibold text-[var(--text-primary)]">Arcto Labs</p>
+                  <p className="text-lg font-semibold text-[var(--text-primary)]">{workspaceDisplayName}</p>
                 </div>
               )}
             </div>

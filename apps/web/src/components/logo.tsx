@@ -7,9 +7,12 @@ interface LogoProps {
   href?: string;
   size?: number;
   showText?: boolean;
+  label?: string;
 }
 
-export function Logo({ className, href = "/", size = 44, showText = true }: LogoProps) {
+export function Logo({ className, href = "/", size = 44, showText = true, label = "Arcto Labs" }: LogoProps) {
+  const displayLabel = label.trim() || "Arcto Labs";
+
   return (
     <Link href={href} className={clsx("inline-flex items-center gap-3", className)}>
       <Image
@@ -22,7 +25,7 @@ export function Logo({ className, href = "/", size = 44, showText = true }: Logo
       />
       {showText && (
         <div className="leading-tight">
-          <p className="text-[14px] uppercase tracking-[0.28em] text-slate-400">Arcto Labs</p>
+          <p className="text-[14px] uppercase tracking-[0.28em] text-slate-400">{displayLabel}</p>
         </div>
       )}
     </Link>
