@@ -37,12 +37,16 @@ export class MessagesService {
     }
 
     if (message.analyzedAt) {
-      this.logger.log(`Message ${id} already analyzed at ${message.analyzedAt}. Skipping.`);
+      this.logger.log(
+        `Message ${id} already analyzed at ${message.analyzedAt}. Skipping.`,
+      );
       return message;
     }
-    
+
     if (!this.openai) {
-      this.logger.warn(`OpenAI is not configured. Skipping analysis for message ${id}.`);
+      this.logger.warn(
+        `OpenAI is not configured. Skipping analysis for message ${id}.`,
+      );
       return message;
     }
 
@@ -65,18 +69,22 @@ export class MessagesService {
 
       const messageContent = response.choices[0].message.content;
       if (!messageContent) {
-        this.logger.warn(`OpenAI returned no content for message ${id}. Skipping analysis.`);
+        this.logger.warn(
+          `OpenAI returned no content for message ${id}. Skipping analysis.`,
+        );
         return message;
       }
       const result = JSON.parse(messageContent);
-      this.logger.log(`AI analysis result for ${id}: ${JSON.stringify(result)}`);
+      this.logger.log(
+        `AI analysis result for ${id}: ${JSON.stringify(result)}`,
+      );
 
       const categoryMap: Record<string, MessageCategory> = {
-        'Angebot': MessageCategory.ANGEBOT,
-        'Kritisch': MessageCategory.KRITISCH,
-        'Kündigung': MessageCategory.KUENDIGUNG,
-        'Werbung': MessageCategory.WERBUNG,
-        'Sonstiges': MessageCategory.SONSTIGES,
+        Angebot: MessageCategory.ANGEBOT,
+        Kritisch: MessageCategory.KRITISCH,
+        Kündigung: MessageCategory.KUENDIGUNG,
+        Werbung: MessageCategory.WERBUNG,
+        Sonstiges: MessageCategory.SONSTIGES,
       };
 
       const updatedMessage = await this.prisma.customerMessage.update({
@@ -131,7 +139,9 @@ export class MessagesService {
         try {
           await this.analyzeMessage(id);
         } catch (err) {
-          this.logger.warn(`Analyse für Message ${id} fehlgeschlagen: ${(err as Error)?.message}`);
+          this.logger.warn(
+            `Analyse für Message ${id} fehlgeschlagen: ${(err as Error)?.message}`,
+          );
         }
       }
     }

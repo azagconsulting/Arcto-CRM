@@ -36,7 +36,8 @@ export class LeadsService {
   ) {}
 
   async createFromLanding(dto: CreateLeadDto) {
-    const tenantId = (await this.getTenantId()) ?? (await this.getDefaultTenantId());
+    const tenantId =
+      (await this.getTenantId()) ?? (await this.getDefaultTenantId());
     if (!tenantId) {
       throw new BadRequestException('Tenant für Lead-Erstellung fehlt.');
     }

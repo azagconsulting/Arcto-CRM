@@ -14,9 +14,7 @@ export class RequestContextInterceptor implements NestInterceptor {
   constructor(private readonly context: RequestContextService) {}
 
   intercept(context: ExecutionContext, next: CallHandler) {
-    const request = context
-      .switchToHttp()
-      .getRequest<{ user?: AuthUser }>();
+    const request = context.switchToHttp().getRequest<{ user?: AuthUser }>();
 
     const authUser = request?.user;
     const payload = authUser

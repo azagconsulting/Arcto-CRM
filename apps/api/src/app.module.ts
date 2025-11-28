@@ -19,6 +19,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { MailSyncModule } from './modules/mail-sync/mail-sync.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { TrackingModule } from './modules/tracking/tracking.module';
 
 @Module({
   imports: [
@@ -45,6 +47,8 @@ import { MessagesModule } from './modules/messages/messages.module';
     UsersModule,
     MailSyncModule,
     MessagesModule,
+    TasksModule,
+    TrackingModule,
   ],
   controllers: [AppController],
   providers: [

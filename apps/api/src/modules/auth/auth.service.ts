@@ -195,12 +195,15 @@ export class AuthService {
   }
 
   private slugify(email: string): string {
-    const candidate = email.includes('@') ? email.split('@')[1] || email : email;
-    const base = candidate
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 32) || 'workspace';
+    const candidate = email.includes('@')
+      ? email.split('@')[1] || email
+      : email;
+    const base =
+      candidate
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 32) || 'workspace';
     const suffix = randomBytes(3).toString('hex');
     return `${base}-${suffix}`;
   }

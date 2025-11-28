@@ -86,7 +86,7 @@ export default function MessagesWorkspacePage() {
 
   const [smtpReady, setSmtpReady] = useState(true);
   const [smtpStatus, setSmtpStatus] = useState<string | null>(null);
-  const [openAiEnabled, setOpenAiEnabled] = useState<boolean | null>(null);
+  const [openAiEnabled, setOpenAiEnabled] = useState(false);
   const [unreadSummary, setUnreadSummary] = useState<{ leads: Record<string, number>; unassigned: number; total: number }>({ leads: {}, unassigned: 0, total: 0 });
   const [locallyReadIds, setLocallyReadIds] = useState<Set<string>>(new Set());
 
@@ -204,7 +204,7 @@ export default function MessagesWorkspacePage() {
       }
 
       const aiFlag = await authorizedRequest<{ enabled: boolean }>("/settings/ai-enabled").catch(() => null);
-      setOpenAiEnabled(aiFlag?.enabled ?? null);
+      setOpenAiEnabled(Boolean(aiFlag?.enabled));
     } catch (err) {
       setError("Daten konnten nicht geladen werden.");
       console.error(err);
@@ -244,6 +244,8 @@ export default function MessagesWorkspacePage() {
   });
 
   useEffect(() => {
+    if (!openAiEnabled) return;
+
     const messagesToAnalyze = [
       ...inboxMessages,
       ...unassignedMessages,
@@ -292,7 +294,7 @@ export default function MessagesWorkspacePage() {
         isUpdatingRef.current = false;
       }
     })();
-  }, [unassignedMessages, inboxMessages, authorizedRequest]);
+  }, [unassignedMessages, inboxMessages, authorizedRequest, openAiEnabled]);
   
   const fetchMessagesByEmails = useCallback(
     async (emails: string[]) => {
@@ -674,6 +676,7 @@ export default function MessagesWorkspacePage() {
     const isUnread = item.direction === "INBOUND" && !item.readAt;
     const timestamp = formatTimestamp(item.receivedAt ?? item.sentAt ?? item.createdAt);
     const urgency = detectUrgency(item);
+    const showAnalysis = openAiEnabled;
     return (
       <div className={clsx("w-full rounded-2xl border px-4 py-3 text-left", isActive ? "border-white/30 bg-white/10" : "border-white/10 text-slate-300 hover:border-white/20")}>
         <p className="font-semibold text-white truncate">{item.subject || "Ohne Betreff"}</p>
@@ -681,19 +684,19 @@ export default function MessagesWorkspacePage() {
           <p className="text-xs text-slate-400">{item.fromEmail ?? "Kein Absender"}</p>
           {isUnread && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-200">Neu</span>}
           {urgency && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-200">{urgency}</span>}
-          {item.analyzedAt && item.category && (
+          {showAnalysis && item.analyzedAt && item.category && (
             <>
               <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-200">{item.category}</span>
             </>
           )}
-          {item.analyzedAt && item.sentiment && (
+          {showAnalysis && item.analyzedAt && item.sentiment && (
             <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase", {
                 'bg-emerald-500/20 text-emerald-200': item.sentiment === 'positive',
                 'bg-slate-500/20 text-slate-200': item.sentiment === 'neutral',
                 'bg-rose-500/20 text-rose-200': item.sentiment === 'negative',
               })}>{item.sentiment}</span>
           )}
-          {!item.analyzedAt && isUuid(item.id) && (
+          {showAnalysis && !item.analyzedAt && isUuid(item.id) && (
             <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-purple-200 animate-pulse">analysiere...</span>
           )}
         </div>

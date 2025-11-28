@@ -50,10 +50,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateEmployeeDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
     return this.usersService.updateEmployee(id, dto);
   }
 

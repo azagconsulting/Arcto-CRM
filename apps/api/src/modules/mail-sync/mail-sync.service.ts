@@ -101,7 +101,11 @@ export class MailSyncService {
           }
 
           const parsed = await simpleParser(message.source);
-          const handled = await this.ingestMessage(parsed, message.uid, tenantId);
+          const handled = await this.ingestMessage(
+            parsed,
+            message.uid,
+            tenantId,
+          );
           if (handled) {
             processed += 1;
             lastUid = Math.max(lastUid, message.uid);
@@ -125,7 +129,11 @@ export class MailSyncService {
     }
   }
 
-  private async ingestMessage(parsed: ParsedMail, uid: number, tenantId: string) {
+  private async ingestMessage(
+    parsed: ParsedMail,
+    uid: number,
+    tenantId: string,
+  ) {
     const externalId =
       typeof parsed.messageId === 'string' ? parsed.messageId : `imap:${uid}`;
     const existing = await this.prisma.customerMessage.findFirst({

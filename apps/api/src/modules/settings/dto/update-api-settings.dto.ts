@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, IsUrl } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, IsUrl } from 'class-validator';
 
 export class UpdateApiSettingsDto {
   @IsOptional()
@@ -15,4 +15,8 @@ export class UpdateApiSettingsDto {
   @IsString()
   @MaxLength(10000)
   serviceAccountJson?: string;
+
+  @IsOptional()
+  @IsIn(['LOCAL', 'GA'])
+  trackingMode?: 'LOCAL' | 'GA';
 }

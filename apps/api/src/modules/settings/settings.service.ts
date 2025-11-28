@@ -203,6 +203,7 @@ export class SettingsService {
     embedUrl: string | null;
     apiToken: string | null;
     hasServiceAccount: boolean;
+    trackingMode: 'LOCAL' | 'GA';
     updatedAt?: string;
   } | null> {
     const record = await this.findSettingRecord(API_SETTING_KEY);
@@ -217,6 +218,7 @@ export class SettingsService {
       embedUrl: payload.embedUrl,
       apiToken: payload.apiToken,
       hasServiceAccount: payload.serviceAccountJson ? true : false,
+      trackingMode: payload.trackingMode,
       updatedAt: record.updatedAt.toISOString(),
     };
   }
@@ -225,6 +227,7 @@ export class SettingsService {
     embedUrl: string | null;
     apiToken: string | null;
     hasServiceAccount: boolean;
+    trackingMode: 'LOCAL' | 'GA';
     updatedAt: string;
   }> {
     const existingRecord = await this.findSettingRecord(API_SETTING_KEY);
@@ -239,11 +242,16 @@ export class SettingsService {
       dto.serviceAccountJson?.trim() ||
       existingParsed?.serviceAccountJson ||
       null;
+    const trackingMode: 'LOCAL' | 'GA' =
+      dto.trackingMode === 'GA' || dto.trackingMode === 'LOCAL'
+        ? dto.trackingMode
+        : (existingParsed?.trackingMode ?? 'LOCAL');
 
     const data = {
       embedUrl,
       apiToken: nextToken,
       serviceAccountJson,
+      trackingMode,
     };
 
     const saved = await this.saveSetting(API_SETTING_KEY, data);
@@ -251,6 +259,7 @@ export class SettingsService {
       embedUrl,
       apiToken: nextToken,
       hasServiceAccount: Boolean(serviceAccountJson),
+      trackingMode,
       updatedAt: saved.updatedAt.toISOString(),
     };
   }
@@ -389,9 +398,7 @@ export class SettingsService {
           ? payload.sinceDays
           : undefined,
       verifiedAt:
-        typeof (payload as Record<string, unknown>).verifiedAt === 'string'
-          ? ((payload as Record<string, unknown>).verifiedAt as string)
-          : undefined,
+        typeof payload.verifiedAt === 'string' ? payload.verifiedAt : undefined,
     };
   }
 
@@ -426,7 +433,8 @@ export class SettingsService {
       host: creds.host,
       port: creds.port,
       secure: creds.encryption === 'ssl',
-      tls: creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
+      tls:
+        creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
       auth: {
         user: creds.username,
         pass: creds.password,
@@ -457,7 +465,8 @@ export class SettingsService {
         user: creds.username,
         pass: creds.password,
       },
-      tls: creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
+      tls:
+        creds.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
     });
 
     try {
@@ -579,11 +588,21 @@ export class SettingsService {
     embedUrl: string | null;
     apiToken: string | null;
     serviceAccountJson?: string | null;
+    trackingMode: 'LOCAL' | 'GA';
   } | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return { embedUrl: null, apiToken: null, serviceAccountJson: null };
+      return {
+        embedUrl: null,
+        apiToken: null,
+        serviceAccountJson: null,
+        trackingMode: 'LOCAL',
+      };
     }
     const payload = value as Record<string, unknown>;
+    const trackingMode =
+      payload.trackingMode === 'GA' || payload.trackingMode === 'LOCAL'
+        ? payload.trackingMode
+        : 'LOCAL';
     return {
       embedUrl: typeof payload.embedUrl === 'string' ? payload.embedUrl : null,
       apiToken: typeof payload.apiToken === 'string' ? payload.apiToken : null,
@@ -591,6 +610,7 @@ export class SettingsService {
         typeof payload.serviceAccountJson === 'string'
           ? payload.serviceAccountJson
           : null,
+      trackingMode,
     };
   }
 }

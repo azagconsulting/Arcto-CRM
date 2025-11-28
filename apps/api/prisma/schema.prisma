@@ -22,6 +22,9 @@ model Tenant {
   customers            Customer[]
   customerMessages     CustomerMessage[]
   tenantSettings       TenantSetting[]
+  tasks                Task[]
+  trackingSessions     TrackingSession[]
+  trackingEvents       TrackingEvent[]
 }
 
 enum UserRole {
@@ -85,6 +88,36 @@ enum MessageCategory {
   SONSTIGES
 }
 
+enum TaskStatus {
+  BACKLOG
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskBoard {
+  TEAM
+  MY
+}
+
+enum TrackingEventType {
+  PAGE_VIEW
+  PAGE_EXIT
+  CLICK
+}
+
+enum TrafficSource {
+  DIRECT
+  ORGANIC
+  REFERRAL
+}
+
 model User {
   id           String     @id @default(uuid())
   tenantId     String
@@ -112,6 +145,8 @@ model User {
   leadUpdates      LeadUpdate[]
   workflowSettings LeadWorkflowSetting[] @relation("LeadWorkflowSettingsAutoAssign")
   blogPosts        BlogPost[]
+  tasksAssigned    Task[]      @relation("TaskAssignee")
+  tasksCreated     Task[]      @relation("TaskCreator")
 
   @@index([tenantId])
 }
@@ -143,6 +178,30 @@ model Lead {
   @@index([assignedToId])
   @@index([createdAt])
   @@index([tenantId])
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  tenantId    String
+  title       String       @db.VarChar(255)
+  description String?      @db.Text
+  status      TaskStatus   @default(BACKLOG)
+  priority    TaskPriority @default(MEDIUM)
+  board       TaskBoard    @default(TEAM)
+  assigneeId  String?
+  creatorId   String?
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignee  User?  @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator   User?  @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  @@index([tenantId, board, status])
+  @@index([assigneeId])
+  @@index([creatorId])
+  @@index([createdAt])
 }
 
 model LeadUpdate {
@@ -298,6 +357,7 @@ model CustomerMessage {
   @@index([leadId, createdAt])
   @@index([analyzedAt])
   @@index([tenantId])
+  @@index([tenantId, direction, createdAt])
 }
 
 model TenantSetting {
@@ -312,4 +372,41 @@ model TenantSetting {
 
   @@unique([tenantId, key])
   @@index([tenantId])
+}
+
+model TrackingSession {
+  id           String         @id @default(uuid())
+  tenantId     String
+  sessionKey   String         @db.VarChar(191)
+  trafficSource TrafficSource @default(DIRECT)
+  referrer     String?        @db.VarChar(512)
+  utmSource    String?        @db.VarChar(120)
+  utmMedium    String?        @db.VarChar(120)
+  firstPage    String?        @db.VarChar(255)
+  startedAt    DateTime       @default(now())
+  lastSeenAt   DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events TrackingEvent[]
+
+  @@unique([tenantId, sessionKey])
+  @@index([tenantId, trafficSource])
+  @@index([tenantId, lastSeenAt])
+}
+
+model TrackingEvent {
+  id         String            @id @default(uuid())
+  tenantId   String
+  sessionId  String
+  type       TrackingEventType
+  path       String            @db.VarChar(255)
+  label      String?           @db.VarChar(255)
+  durationMs Int?
+  createdAt  DateTime          @default(now())
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session TrackingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, path, type, createdAt])
+  @@index([sessionId])
 }

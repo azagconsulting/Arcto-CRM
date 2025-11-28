@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { NotificationProvider } from "@/components/notifications/notifications-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TrackingProvider } from "@/components/tracking-provider";
 
 const fontSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="de" suppressHydrationWarning>
       <body className={`${fontSans.variable} antialiased`}>
         <ThemeProvider>
+          <TrackingProvider />
           <NotificationProvider>
             <AuthProvider>{children}</AuthProvider>
           </NotificationProvider>

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, User, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -10,6 +15,8 @@ import type { SanitizedUser } from '../auth/auth.types';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SettingsService } from '../settings/settings.service';
+import { SmtpCredentials } from '../../common/interfaces/smtp-settings.interface';
 
 interface CreateUserInput {
   tenantId: string;
@@ -26,7 +33,10 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly context: RequestContextService,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  private readonly logger = new Logger(UsersService.name);
 
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
@@ -117,16 +127,31 @@ export class UsersService {
     });
 
     const tempPassword = dto.password ? undefined : password;
-    void this.sendInviteEmail({
-      email: dto.email,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      password: tempPassword ?? dto.password ?? password,
-    });
+    let inviteEmailSent = false;
+    let inviteEmailError: string | undefined;
+    try {
+      await this.sendInviteEmail({
+        email: dto.email,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        password: tempPassword ?? dto.password ?? password,
+      });
+      inviteEmailSent = true;
+    } catch (err) {
+      inviteEmailError =
+        err instanceof Error
+          ? err.message
+          : 'Einladung konnte nicht gesendet werden.';
+      this.logger.warn(
+        `Einladung konnte nicht per E-Mail gesendet werden: ${inviteEmailError}`,
+      );
+    }
 
     return {
       user: this.toSanitizedUser(user),
       temporaryPassword: tempPassword,
+      inviteEmailSent,
+      inviteEmailError,
     };
   }
 
@@ -190,8 +215,8 @@ export class UsersService {
     if (dto.role) data.role = dto.role;
 
     const user = await this.prisma.user.update({
-        where: { id },
-        data,
+      where: { id },
+      data,
     });
     return this.toSanitizedUser(user);
   }
@@ -199,7 +224,7 @@ export class UsersService {
   async deleteEmployee(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
-        throw new NotFoundException('Mitarbeiter nicht gefunden.');
+      throw new NotFoundException('Mitarbeiter nicht gefunden.');
     }
     await this.prisma.user.delete({ where: { id } });
     return { message: 'Mitarbeiter gelöscht.' };
@@ -242,23 +267,35 @@ export class UsersService {
     lastName?: string;
     password: string;
   }) {
+    const tenantSmtp: SmtpCredentials | null =
+      await this.settingsService.getSmtpCredentials();
+
+    if (!tenantSmtp && !this.emailService.hasSmtpTransport()) {
+      throw new Error(
+        'SMTP ist nicht konfiguriert. Bitte unter Einstellungen einen SMTP-Zugang hinterlegen.',
+      );
+    }
+
     const name = [input.firstName, input.lastName]
       .filter(Boolean)
       .join(' ')
       .trim();
     const loginUrl = process.env.APP_URL ?? 'http://localhost:3000';
-    const subject = 'Dein Zugang zum Arcto CRM';
-    
+    const subject = 'Willkommen im Arcto CRM – dein Zugang';
+    const greeting = name ? `Hi ${name},` : 'Hi,';
+
     const text = [
-      name ? `Hi ${name},` : 'Hi,',
+      greeting,
       '',
-      'willkommen im Arcto CRM. Hier sind deine Zugangsdaten:',
+      'du wurdest ins Arcto CRM eingeladen. Hier sind deine Zugangsdaten:',
       `E-Mail: ${input.email}`,
       `Passwort: ${input.password}`,
       '',
       `Login: ${loginUrl}`,
       '',
-      'Bitte melde dich an und ändere dein Passwort im Profil.',
+      'Bitte melde dich an und ändere dein Passwort nach dem ersten Login in deinem Profil.',
+      '',
+      'Wenn du Fragen hast, melde dich gerne beim Team.',
       '',
       'Viele Grüße',
       'Dein Arcto Team',
@@ -272,36 +309,47 @@ export class UsersService {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${subject}</title>
 </head>
-<body style="font-family: sans-serif; background-color: #f4f4f4; padding: 20px; color: #333;">
-    <div style="max-width: 600px; margin: auto; background-color: #fff; border-radius: 8px; padding: 40px; border: 1px solid #ddd;">
-        <h1 style="color: #0f172a; font-size: 24px;">Willkommen bei Arcto CRM!</h1>
-        <p style="font-size: 16px; line-height: 1.5;">Hallo ${name || ''},</p>
-        <p style="font-size: 16px; line-height: 1.5;">
-            ein Account für dich wurde erstellt. Hier sind deine Zugangsdaten, um dich anzumelden:
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background-color: #0b1220; padding: 24px; color: #e2e8f0;">
+    <div style="max-width: 640px; margin: auto; background: linear-gradient(135deg, #111827 0%, #0b1220 100%); border-radius: 16px; padding: 32px; border: 1px solid #1f2937;">
+        <p style="letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; color: #94a3b8; margin: 0 0 12px 0;">Team</p>
+        <h1 style="margin: 0 0 12px 0; font-size: 24px; color: #e5e7eb;">Willkommen im Arcto CRM</h1>
+        <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6;">${greeting}</p>
+        <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6;">
+            du wurdest eingeladen, unser CRM zu nutzen. Hier sind deine Zugangsdaten:
         </p>
-        <div style="background-color: #f8f8f8; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; font-size: 16px;">
-            <p style="margin: 0 0 10px 0;"><strong>E-Mail:</strong> ${input.email}</p>
-            <p style="margin: 0;"><strong>Passwort:</strong> ${input.password}</p>
+        <div style="background: #0f172a; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #cbd5e1;"><strong>E-Mail:</strong> ${input.email}</p>
+            <p style="margin: 0; font-size: 14px; color: #cbd5e1;"><strong>Passwort:</strong> ${input.password}</p>
         </div>
-        <p style="font-size: 16px; line-height: 1.5;">
+        <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
             Bitte ändere dein Passwort nach dem ersten Login in deinem Profil.
         </p>
-        <a href="${loginUrl}" style="display: inline-block; background-color: #0f172a; color: #fff; padding: 12px 25px; border-radius: 5px; text-decoration: none; font-size: 16px; margin-top: 20px;">
-            Jetzt Anmelden
+        <a href="${loginUrl}" style="display: inline-block; margin-top: 8px; background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); color: #0b1220; padding: 12px 20px; border-radius: 9999px; text-decoration: none; font-weight: 600; font-size: 14px;">
+            Jetzt anmelden
         </a>
-        <p style="font-size: 14px; color: #777; margin-top: 30px;">
-            Viele Grüße,<br>
-            Dein Arcto Team
+        <p style="margin: 20px 0 0 0; font-size: 13px; color: #94a3b8;">
+            Bei Fragen melde dich gerne beim Team.
         </p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: #94a3b8;">Viele Grüße<br>Dein Arcto Team</p>
     </div>
 </body>
 </html>`;
 
-    await this.emailService.sendEmail({
-      to: input.email,
-      subject,
-      text,
-      html,
-    });
+    await this.emailService.sendEmail(
+      {
+        to: input.email,
+        subject,
+        text,
+        html,
+        from:
+          tenantSmtp?.fromEmail && tenantSmtp.fromName
+            ? `${tenantSmtp.fromName} <${tenantSmtp.fromEmail}>`
+            : (tenantSmtp?.fromEmail ??
+              (this.emailService.getDefaultSender()
+                ? `Arcto Team <${this.emailService.getDefaultSender()}>`
+                : undefined)),
+      },
+      tenantSmtp ?? undefined,
+    );
   }
 }

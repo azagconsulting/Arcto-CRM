@@ -1,3 +1,3 @@
--- Add readAt timestamp to track message read state (shared across users)
+-- readAt bereits in früherer Migration vorhanden; sicherstellen, dass der Typ passt
 ALTER TABLE `CustomerMessage`
-ADD COLUMN `readAt` DATETIME NULL;
+MODIFY `readAt` DATETIME NULL;

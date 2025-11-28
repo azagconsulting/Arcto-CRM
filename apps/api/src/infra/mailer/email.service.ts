@@ -137,7 +137,10 @@ export class EmailService {
         user: credentials.username,
         pass: credentials.password,
       },
-      tls: credentials.encryption === 'tls' ? { rejectUnauthorized: false } : undefined,
+      tls:
+        credentials.encryption === 'tls'
+          ? { rejectUnauthorized: false }
+          : undefined,
     };
     return nodemailer.createTransport<SentMessageInfo>(smtpOptions);
   }

@@ -273,6 +273,7 @@ export interface ApiSettings {
   embedUrl: string | null;
   apiToken: string | null;
   hasServiceAccount: boolean;
+  trackingMode: "LOCAL" | "GA";
   updatedAt?: string;
   serviceAccountJson?: string | null;
 }
@@ -326,9 +327,47 @@ export interface WorkspaceSettings {
 export interface CreateEmployeeResponse {
   user: AuthUser;
   temporaryPassword?: string | null;
+  inviteEmailSent?: boolean;
+  inviteEmailError?: string | null;
 }
 
 export interface LeadMessageListResponse {
   lead: Lead;
   items: CustomerMessage[];
+}
+
+export type TrackingEventType = "PAGE_VIEW" | "PAGE_EXIT" | "CLICK";
+
+export interface TrackingTimeseriesPoint {
+  date: string;
+  views: number;
+  organic: number;
+  direct: number;
+  clicks: number;
+  uniqueVisitors: number;
+}
+
+export interface TrackingPageStat {
+  path: string;
+  views: number;
+  uniqueVisitors: number;
+  clicks: number;
+  clickRate: number;
+  avgDurationMs: number;
+  organicViews: number;
+  directViews: number;
+}
+
+export interface TrackingSummary {
+  since: string;
+  until: string;
+  totals: {
+    views: number;
+    uniqueVisitors: number;
+    clicks: number;
+    organicShare: number;
+    avgDurationMs: number;
+  };
+  pages: TrackingPageStat[];
+  timeseries: TrackingTimeseriesPoint[];
 }
