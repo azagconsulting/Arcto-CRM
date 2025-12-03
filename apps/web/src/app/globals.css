@@ -71,6 +71,32 @@ a {
   color: #0f172a;
 }
 
+/* Schlanke, moderne Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) rgba(255, 255, 255, 0.05);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.7), rgba(56, 189, 248, 0.7));
+  border-radius: 9999px;
+  border: 1px solid rgba(2, 6, 23, 0.3);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.9), rgba(56, 189, 248, 0.9));
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

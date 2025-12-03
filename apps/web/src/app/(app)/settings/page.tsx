@@ -9,19 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  OPENAI_KEY_STORAGE,
-  SERPAPI_KEY_STORAGE,
-  WORKSPACE_NAME_STORAGE,
-} from "@/lib/constants";
+import { SERPAPI_KEY_STORAGE, WORKSPACE_NAME_STORAGE } from "@/lib/constants";
 import type {
   ApiSettings,
   ImapEncryption,
   ImapSettings,
   SmtpEncryption,
   SmtpSettings,
+  ContactSmtpSettings,
   WorkspaceSettings,
   AuthUser,
+  MessageAnalysisSettings,
+  OpenAiSettings,
 } from "@/lib/types";
 
 type SettingsTab =
@@ -29,6 +28,7 @@ type SettingsTab =
   | "workspace"
   | "ai"
   | "email"
+  | "contact"
   | "notifications";
 
 type ProfileForm = {
@@ -145,6 +145,7 @@ export default function SettingsPage() {
   const [serpApiKey, setSerpApiKey] = useState("");
   const [openAiStatus, setOpenAiStatus] = useState<string | null>(null);
   const [serpStatus, setSerpStatus] = useState<string | null>(null);
+  const [openAiSettings, setOpenAiSettings] = useState<OpenAiSettings | null>(null);
   const [apiSettings, setApiSettings] = useState<ApiSettings>({
     embedUrl: "",
     apiToken: null,
@@ -175,6 +176,7 @@ export default function SettingsPage() {
     port: 993,
     username: "",
     mailbox: "INBOX",
+    spamMailbox: "Spam",
     encryption: "ssl",
     hasPassword: false,
     sinceDays: 7,
@@ -185,6 +187,13 @@ export default function SettingsPage() {
   const [imapNotice, setImapNotice] = useState<string | null>(null);
   const [imapSaving, setImapSaving] = useState(false);
   const [apiLoading, setApiLoading] = useState(false);
+  const [contactSmtpForm, setContactSmtpForm] = useState<ContactSmtpSettings | null>(null);
+  const [contactSmtpPassword, setContactSmtpPassword] = useState("");
+  const [contactSmtpNotice, setContactSmtpNotice] = useState<string | null>(null);
+  const [contactSmtpSaving, setContactSmtpSaving] = useState(false);
+  const [analysisSettings, setAnalysisSettings] = useState<MessageAnalysisSettings>({ enabled: false });
+  const [analysisSaving, setAnalysisSaving] = useState(false);
+  const [analysisNotice, setAnalysisNotice] = useState<string | null>(null);
 
   const profileInitials = useMemo(() => {
     const initials = `${profileForm.firstName?.[0] ?? ""}${profileForm.lastName?.[0] ?? ""}`.trim();
@@ -217,9 +226,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") {
       return;
     }
-    const storedKey = window.localStorage.getItem(OPENAI_KEY_STORAGE) ?? "";
     const storedSerp = window.localStorage.getItem(SERPAPI_KEY_STORAGE) ?? "";
-    setOpenAiKey(storedKey);
     setSerpApiKey(storedSerp);
   }, []);
 
@@ -269,6 +276,21 @@ export default function SettingsPage() {
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
+    authorizedRequest<ContactSmtpSettings | null>("/settings/contact-smtp", { signal: controller.signal })
+      .then((data) => {
+        if (!mounted) return;
+        setContactSmtpForm(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [authorizedRequest]);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
     setApiLoading(true);
     authorizedRequest<ApiSettings | null>("/settings/api", { signal: controller.signal })
       .then((data) => {
@@ -294,7 +316,43 @@ export default function SettingsPage() {
     authorizedRequest<ImapSettings | null>("/settings/imap", { signal: controller.signal })
       .then((data) => {
         if (!mounted || !data) return;
-        setImapForm(data);
+        setImapForm({
+          ...data,
+          spamMailbox: data.spamMailbox ?? "Spam",
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [authorizedRequest]);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    authorizedRequest<MessageAnalysisSettings>("/settings/analysis", { signal: controller.signal })
+      .then((data) => {
+        if (!mounted || !data) return;
+        setAnalysisSettings({
+          enabled: Boolean(data.enabled),
+          updatedAt: data.updatedAt,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [authorizedRequest]);
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    authorizedRequest<OpenAiSettings | null>("/settings/openai", { signal: controller.signal })
+      .then((data) => {
+        if (!mounted) return;
+        setOpenAiSettings(data);
       })
       .catch(() => undefined);
     return () => {
@@ -388,11 +446,37 @@ export default function SettingsPage() {
     }
   };
 
-  const handleOpenAiSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleOpenAiSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(OPENAI_KEY_STORAGE, openAiKey.trim());
-    setOpenAiStatus("OpenAI-Key gespeichert.");
+    setOpenAiStatus(null);
+    try {
+      const response = await authorizedRequest<OpenAiSettings>("/settings/openai", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: openAiKey.trim() || null }),
+      });
+      setOpenAiSettings(response);
+      setOpenAiKey("");
+      setOpenAiStatus("Server-Key gespeichert.");
+    } catch (err) {
+      setOpenAiStatus(err instanceof Error ? err.message : "Key konnte nicht gespeichert werden.");
+    }
+  };
+
+  const handleOpenAiRemove = async () => {
+    setOpenAiStatus(null);
+    try {
+      const response = await authorizedRequest<OpenAiSettings>("/settings/openai", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: null }),
+      });
+      setOpenAiSettings(response);
+      setOpenAiKey("");
+      setOpenAiStatus("Server-Key entfernt.");
+    } catch (err) {
+      setOpenAiStatus(err instanceof Error ? err.message : "Key konnte nicht entfernt werden.");
+    }
   };
 
   const handleSerpSave = (event: React.FormEvent<HTMLFormElement>) => {
@@ -488,6 +572,58 @@ export default function SettingsPage() {
     }
   };
 
+  const handleContactSmtpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setContactSmtpSaving(true);
+    setContactSmtpNotice(null);
+    try {
+      if (!contactSmtpForm) {
+        throw new Error("Bitte zuerst Daten eingeben.");
+      }
+      const payload = {
+        host: contactSmtpForm.host,
+        port: Number(contactSmtpForm.port),
+        username: contactSmtpForm.username,
+        fromName: contactSmtpForm.fromName,
+        fromEmail: contactSmtpForm.fromEmail,
+        encryption: contactSmtpForm.encryption,
+        password: contactSmtpPassword || undefined,
+      };
+      const response = await authorizedRequest<ContactSmtpSettings>("/settings/contact-smtp", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setContactSmtpForm(response);
+      setContactSmtpPassword("");
+      setContactSmtpNotice("Kontaktformular SMTP gespeichert.");
+    } catch (err) {
+      setContactSmtpNotice(err instanceof Error ? err.message : "Kontaktformular SMTP konnte nicht gespeichert werden.");
+    } finally {
+      setContactSmtpSaving(false);
+    }
+  };
+
+  const handleAnalysisSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAnalysisSaving(true);
+    setAnalysisNotice(null);
+    try {
+      const payload = { enabled: Boolean(analysisSettings.enabled) };
+      const response = await authorizedRequest<MessageAnalysisSettings>("/settings/analysis", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setAnalysisSettings(response);
+      setAnalysisNotice(response.enabled ? "Analyse aktiviert." : "Analyse deaktiviert.");
+    } catch (err) {
+      setAnalysisNotice(err instanceof Error ? err.message : "Analyse-Einstellung konnte nicht gespeichert werden.");
+    } finally {
+      setAnalysisSaving(false);
+    }
+  };
+
   return (
     <section className="space-y-8">
       <div>
@@ -503,6 +639,7 @@ export default function SettingsPage() {
           { key: "workspace", label: "Unternehmensprofil" },
           { key: "ai", label: "AI & Search Keys" },
           { key: "email", label: "E-Mail Einstellungen" },
+          { key: "contact", label: "Kontaktformular" },
           { key: "notifications", label: "Benachrichtigungen" },
         ].map((tab) => (
           <button
@@ -706,23 +843,27 @@ export default function SettingsPage() {
                   placeholder="sk-..."
                 />
               </label>
+              <p className="text-xs text-slate-500">
+                Wird tenant-weit gespeichert (Server), nicht im Browser.
+              </p>
               <div className="flex flex-wrap gap-3">
                 <Button size="sm" type="submit">Key speichern</Button>
                 <Button
                   size="sm"
                   type="button"
                   variant="secondary"
-                  onClick={() => {
-                    if (typeof window === "undefined") return;
-                    window.localStorage.removeItem(OPENAI_KEY_STORAGE);
-                    setOpenAiKey("");
-                    setOpenAiStatus("OpenAI-Key entfernt.");
-                  }}
+                  onClick={handleOpenAiRemove}
                 >
                   Key entfernen
                 </Button>
               </div>
               {openAiStatus && <p className="text-xs text-slate-400">{openAiStatus}</p>}
+              {openAiSettings?.hasApiKey && (
+                <p className="text-xs text-slate-400">
+                  Server-Key hinterlegt
+                  {openAiSettings.updatedAt ? ` · Aktualisiert: ${openAiSettings.updatedAt}` : ""}
+                </p>
+              )}
             </form>
           </Card>
 
@@ -855,6 +996,16 @@ export default function SettingsPage() {
                 <Input className="mt-2" value={imapForm.mailbox} onChange={(e) => setImapForm({ ...imapForm, mailbox: e.target.value })} />
               </label>
               <label className="text-sm text-slate-300">
+                Spam-Mailbox
+                <Input
+                  className="mt-2"
+                  value={imapForm.spamMailbox ?? ""}
+                  onChange={(e) => setImapForm({ ...imapForm, spamMailbox: e.target.value })}
+                  placeholder="z.B. Spam oder [Gmail]/Spam"
+                />
+                <p className="mt-1 text-xs text-slate-500">Optional: Ordnername für Spam/Junk.</p>
+              </label>
+              <label className="text-sm text-slate-300">
                 Sync Zeitraum (Tage)
                 <Input className="mt-2" value={imapForm.sinceDays} onChange={(e) => setImapForm({ ...imapForm, sinceDays: Number(e.target.value) })} />
               </label>
@@ -877,6 +1028,32 @@ export default function SettingsPage() {
               </Button>
             </form>
           </Card>
+
+          <Card title="KI-Analyse" description="Eingehende Mails automatisch klassifizieren.">
+            <form className="space-y-3" onSubmit={handleAnalysisSubmit}>
+              <label className="flex items-center gap-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-sky-400"
+                  checked={analysisSettings.enabled}
+                  onChange={(e) => setAnalysisSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
+                />
+                Analyse für eingehende Nachrichten aktivieren
+              </label>
+              <p className="text-xs text-slate-400">
+                Kategorien: Werbung, Kündigung, Kritisch, Angebot, Kostenvoranschlag, Sonstiges. Nutzt OpenAI mit dem Key aus „AI & Search Keys“ (pro Benutzer, kein Env-Fallback).
+              </p>
+              {analysisNotice && (
+                <p className="text-xs text-emerald-300">{analysisNotice}</p>
+              )}
+              {analysisSettings.updatedAt && (
+                <p className="text-xs text-slate-400">Aktualisiert: {analysisSettings.updatedAt}</p>
+              )}
+              <Button size="sm" type="submit" disabled={analysisSaving}>
+                {analysisSaving ? "Speichern…" : "Einstellung speichern"}
+              </Button>
+            </form>
+          </Card>
         </div>
       )}
 
@@ -895,6 +1072,109 @@ export default function SettingsPage() {
               ))}
               <Button size="sm" type="submit">
                 Einstellungen sichern
+              </Button>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "contact" && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card title="Kontaktformular SMTP" description="Eigener SMTP-Zugang für das Kontaktformular. Nur Admins können speichern.">
+            <form className="space-y-4" onSubmit={handleContactSmtpSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm text-slate-300">
+                  Host
+                  <Input
+                    className="mt-2"
+                    value={contactSmtpForm?.host ?? ""}
+                    onChange={(e) =>
+                      setContactSmtpForm((prev) => ({ ...(prev ?? {} as ContactSmtpSettings), host: e.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Port
+                  <Input
+                    className="mt-2"
+                    value={contactSmtpForm?.port ?? 587}
+                    onChange={(e) =>
+                      setContactSmtpForm((prev) => ({
+                        ...(prev ?? {} as ContactSmtpSettings),
+                        port: Number(e.target.value),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm text-slate-300">
+                  Nutzername
+                  <Input
+                    className="mt-2"
+                    value={contactSmtpForm?.username ?? ""}
+                    onChange={(e) =>
+                      setContactSmtpForm((prev) => ({ ...(prev ?? {} as ContactSmtpSettings), username: e.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="text-sm text-slate-300">
+                  Passwort
+                  <Input
+                    type="password"
+                    className="mt-2"
+                    value={contactSmtpPassword}
+                    onChange={(e) => setContactSmtpPassword(e.target.value)}
+                    placeholder={contactSmtpForm?.hasPassword ? "Gespeichert" : ""}
+                  />
+                </label>
+              </div>
+              <label className="text-sm text-slate-300">
+                Absendername
+                <Input
+                  className="mt-2"
+                  value={contactSmtpForm?.fromName ?? ""}
+                  onChange={(e) =>
+                    setContactSmtpForm((prev) => ({ ...(prev ?? {} as ContactSmtpSettings), fromName: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Absender E-Mail
+                <Input
+                  className="mt-2"
+                  value={contactSmtpForm?.fromEmail ?? ""}
+                  onChange={(e) =>
+                    setContactSmtpForm((prev) => ({ ...(prev ?? {} as ContactSmtpSettings), fromEmail: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Verschlüsselung
+                <select
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:border-sky-400 focus:outline-none"
+                  value={contactSmtpForm?.encryption ?? "tls"}
+                  onChange={(event) =>
+                    setContactSmtpForm((prev) => ({
+                      ...(prev ?? {} as ContactSmtpSettings),
+                      encryption: event.target.value as SmtpEncryption,
+                    }))
+                  }
+                >
+                  <option value="none">Keine</option>
+                  <option value="ssl">SSL</option>
+                  <option value="tls">TLS</option>
+                </select>
+              </label>
+              {contactSmtpNotice && <p className="text-xs text-emerald-300">{contactSmtpNotice}</p>}
+              {contactSmtpForm?.updatedAt && (
+                <p className="text-xs text-slate-400">Aktualisiert: {contactSmtpForm.updatedAt}</p>
+              )}
+              <Button size="sm" type="submit" disabled={contactSmtpSaving}>
+                {contactSmtpSaving ? "Speichern…" : "Kontakt SMTP speichern"}
               </Button>
             </form>
           </Card>

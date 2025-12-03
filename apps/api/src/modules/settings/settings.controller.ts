@@ -4,8 +4,10 @@ import { UpdateSmtpSettingsDto } from './dto/update-smtp-settings.dto';
 import { UpdateImapSettingsDto } from './dto/update-imap-settings.dto';
 import { UpdateWorkspaceSettingsDto } from './dto/update-workspace-settings.dto';
 import { UpdateApiSettingsDto } from './dto/update-api-settings.dto';
+import { UpdateContactSmtpSettingsDto } from './dto/update-contact-smtp-settings.dto';
+import { UpdateAnalysisSettingsDto } from './dto/update-analysis-settings.dto';
+import { UpdateOpenAiSettingsDto } from './dto/update-openai-settings.dto';
 import { SettingsService } from './settings.service';
-import { Public } from '../auth/decorators/public.decorator';
 
 @Controller({
   path: 'settings',
@@ -22,6 +24,16 @@ export class SettingsController {
   @Put('smtp')
   updateSmtpSettings(@Body() dto: UpdateSmtpSettingsDto) {
     return this.settingsService.updateSmtpSettings(dto);
+  }
+
+  @Get('contact-smtp')
+  getContactSmtp() {
+    return this.settingsService.getContactFormSmtpSettings();
+  }
+
+  @Put('contact-smtp')
+  updateContactSmtp(@Body() dto: UpdateContactSmtpSettingsDto) {
+    return this.settingsService.updateContactFormSmtpSettings(dto);
   }
 
   @Get('imap')
@@ -54,9 +66,23 @@ export class SettingsController {
     return this.settingsService.updateApiSettings(dto);
   }
 
-  @Public()
-  @Get('ai-enabled')
-  aiEnabled() {
-    return { enabled: Boolean(process.env.OPENAI_API_KEY) };
+  @Get('analysis')
+  getAnalysisSettings() {
+    return this.settingsService.getMessageAnalysisSettings();
+  }
+
+  @Put('analysis')
+  updateAnalysisSettings(@Body() dto: UpdateAnalysisSettingsDto) {
+    return this.settingsService.updateMessageAnalysisSettings(dto);
+  }
+
+  @Get('openai')
+  getOpenAiSettings() {
+    return this.settingsService.getOpenAiSettings({ includeSecret: true });
+  }
+
+  @Put('openai')
+  updateOpenAiSettings(@Body() dto: UpdateOpenAiSettingsDto) {
+    return this.settingsService.updateOpenAiSettings(dto);
   }
 }

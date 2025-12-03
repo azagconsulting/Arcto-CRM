@@ -291,7 +291,7 @@ export default function TrackingPage() {
               <span>Sortieren nach</span>
               <SortSelect sortKey={sortKey} sortDir={sortDir} onChange={setSortKey} onToggleDir={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))} />
               <Button
-                size="xs"
+                size="sm"
                 variant="ghost"
                 className="rounded-full border border-white/10 bg-white/5 text-[11px]"
                 onClick={() => exportPagesCsv(filteredPages)}

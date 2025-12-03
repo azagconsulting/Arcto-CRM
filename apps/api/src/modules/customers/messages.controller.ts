@@ -3,6 +3,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ListCustomerMessagesDto } from './dto/list-customer-messages.dto';
 import { MarkMessagesReadDto } from './dto/mark-messages-read.dto';
 import { SendCustomerMessageDto } from './dto/send-customer-message.dto';
+import { MarkMessagesTrashDto } from './dto/mark-messages-trash.dto';
 import { CustomerMessagesService } from './customer-messages.service';
 
 @Controller({
@@ -35,6 +36,11 @@ export class MessagesController {
     return this.messagesService.listSpam(query);
   }
 
+  @Get('trash')
+  listTrash(@Query() query: ListCustomerMessagesDto) {
+    return this.messagesService.listTrash(query);
+  }
+
   @Get('unassigned')
   listUnassigned(@Query() query: ListCustomerMessagesDto) {
     return this.messagesService.listUnassignedMessages(query);
@@ -48,6 +54,11 @@ export class MessagesController {
   @Post('read')
   markRead(@Body() dto: MarkMessagesReadDto) {
     return this.messagesService.markMessagesRead(dto.ids);
+  }
+
+  @Post('trash')
+  moveToTrash(@Body() dto: MarkMessagesTrashDto) {
+    return this.messagesService.moveMessagesToTrash(dto.ids);
   }
 
   @Get('unread-summary')

@@ -10,6 +10,18 @@ export interface SmtpCredentials {
   encryption: SmtpEncryption;
 }
 
+export interface ContactFormSmtpSettings {
+  mode: 'same' | 'custom';
+  host?: string;
+  port?: number;
+  username?: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  encryption?: SmtpEncryption;
+  hasPassword: boolean;
+  updatedAt?: string;
+}
+
 export interface SmtpSettingsResponse {
   host: string;
   port: number;
@@ -19,4 +31,5 @@ export interface SmtpSettingsResponse {
   encryption: SmtpEncryption;
   hasPassword: boolean;
   updatedAt: string;
+  contactForm?: ContactFormSmtpSettings;
 }

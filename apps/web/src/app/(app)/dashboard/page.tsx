@@ -155,7 +155,7 @@ export default function DashboardPage() {
               </div>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 className="rounded-full border border-white/10 bg-white/5"
                 onClick={() => {
                   if (rangeKey === "custom" && customFrom && customTo) {
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Button
-                      size="xs"
+                      size="sm"
                       className="rounded-full px-3"
                       disabled={!customFrom || !customTo}
                       onClick={() => {

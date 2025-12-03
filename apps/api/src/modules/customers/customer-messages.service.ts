@@ -60,6 +60,12 @@ export interface CustomerMessageResponse {
   readAt?: string | null;
   sentAt?: string | null;
   receivedAt?: string | null;
+  isSpam?: boolean;
+   category?: string | null;
+   sentiment?: string | null;
+   urgency?: string | null;
+   summary?: string | null;
+   analyzedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,9 +129,13 @@ export class CustomerMessagesService {
       ),
     );
 
+    const userId = this.requireUserId();
+
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
+        isSpam: false,
         OR: [
           { customerId },
           contactEmails.length ? { toEmail: { in: contactEmails } } : undefined,
@@ -169,6 +179,7 @@ export class CustomerMessagesService {
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId, tenantId },
       include: { contacts: true },
@@ -197,17 +208,21 @@ export class CustomerMessagesService {
     const subject =
       dto.subject?.trim() ?? `Update von ${customer.ownerName ?? 'Arcto CRM'}`;
     const preview = dto.preview?.trim() ?? this.buildPreview(dto.body);
-    const fromEmail =
-      dto.fromEmail?.trim() ?? this.emailService.getDefaultSender();
     const attachments = this.normalizeAttachments(dto.attachments);
 
     const smtpCredentials = await this.settingsService.getSmtpCredentials();
 
-    if (!smtpCredentials && !this.emailService.hasSmtpTransport()) {
+    if (!smtpCredentials) {
       throw new BadRequestException(
         'Es ist kein SMTP-Zugang konfiguriert. Bitte hinterlege die Zugangsdaten in den Einstellungen.',
       );
     }
+
+    const fromEmail =
+      dto.fromEmail?.trim() ??
+      smtpCredentials.fromEmail ??
+      smtpCredentials.username ??
+      undefined;
 
     const sendResult = await this.emailService.sendEmail(
       {
@@ -218,12 +233,13 @@ export class CustomerMessagesService {
         from: fromEmail,
         attachments,
       },
-      smtpCredentials ?? undefined,
+      smtpCredentials,
     );
 
     const saved = await this.prisma.customerMessage.create({
       data: {
         tenant: { connect: { id: tenantId } },
+        ownerUser: { connect: { id: userId } },
         customer: { connect: { id: customerId } },
         lead: undefined,
         contact: contact ? { connect: { id: contact.id } } : undefined,
@@ -276,10 +292,14 @@ export class CustomerMessagesService {
       );
     }
 
+    const userId = this.requireUserId();
+
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
         OR: orFilters,
+        isSpam: false,
       },
       include: { contact: true },
       orderBy: { createdAt: 'desc' },
@@ -327,6 +347,7 @@ export class CustomerMessagesService {
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const lead = await this.prisma.lead.findUnique({
       where: { id: leadId, tenantId },
     });
@@ -345,17 +366,21 @@ export class CustomerMessagesService {
 
     const subject = dto.subject?.trim() ?? `Update für ${lead.fullName}`;
     const preview = dto.preview?.trim() ?? this.buildPreview(dto.body);
-    const fromEmail =
-      dto.fromEmail?.trim() ?? this.emailService.getDefaultSender();
     const attachments = this.normalizeAttachments(dto.attachments);
 
     const smtpCredentials = await this.settingsService.getSmtpCredentials();
 
-    if (!smtpCredentials && !this.emailService.hasSmtpTransport()) {
+    if (!smtpCredentials) {
       throw new BadRequestException(
         'Es ist kein SMTP-Zugang konfiguriert. Bitte hinterlege die Zugangsdaten in den Einstellungen.',
       );
     }
+
+    const fromEmail =
+      dto.fromEmail?.trim() ??
+      smtpCredentials.fromEmail ??
+      smtpCredentials.username ??
+      undefined;
 
     const sendResult = await this.emailService.sendEmail(
       {
@@ -366,12 +391,13 @@ export class CustomerMessagesService {
         from: fromEmail,
         attachments,
       },
-      smtpCredentials ?? undefined,
+      smtpCredentials,
     );
 
     const saved = await this.prisma.customerMessage.create({
       data: {
         tenant: { connect: { id: tenantId } },
+        ownerUser: { connect: { id: userId } },
         lead: { connect: { id: leadId } },
         customer: undefined,
         contact: undefined,
@@ -404,11 +430,14 @@ export class CustomerMessagesService {
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const limit = Math.min(dto?.limit ?? 50, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
         direction: CustomerMessageDirection.OUTBOUND,
+        deletedAt: null,
         ...(dto.customerId && { customerId: dto.customerId }),
       },
       include: { contact: true },
@@ -422,11 +451,15 @@ export class CustomerMessagesService {
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const limit = Math.min(dto?.limit ?? 50, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
         direction: CustomerMessageDirection.INBOUND,
+        isSpam: false,
+        deletedAt: null,
         ...(dto.customerId && { customerId: dto.customerId }),
       },
       include: { contact: true },
@@ -439,30 +472,59 @@ export class CustomerMessagesService {
   async listSpam(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
-    // TODO: Implement actual spam filtering
-    const limit = Math.min(dto?.limit ?? 40, 200);
-    void this.requireTenantId();
-    void limit;
-
     if (dto.customerId) {
       // If a customerId is provided, it doesn't make sense to show spam,
       // as spam is typically not associated with a specific customer.
       return Promise.resolve([]);
     }
 
-    return Promise.resolve([]);
+    const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
+    const limit = Math.min(dto?.limit ?? 40, 200);
+    const records = await this.prisma.customerMessage.findMany({
+      where: {
+        tenantId,
+        ownerUserId: userId,
+        isSpam: true,
+        direction: CustomerMessageDirection.INBOUND,
+        deletedAt: null,
+      },
+      include: { contact: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    return records.map((record) => this.toResponse(record));
+  }
+
+  async listTrash(dto: ListCustomerMessagesDto): Promise<CustomerMessageResponse[]> {
+    const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
+    const limit = Math.min(dto?.limit ?? 50, 200);
+    const records = await this.prisma.customerMessage.findMany({
+      where: { tenantId, ownerUserId: userId, deletedAt: { not: null } },
+      include: { contact: true },
+      orderBy: { deletedAt: 'desc' },
+      take: limit,
+    });
+    return records.map((record) => this.toResponse(record));
   }
 
   async listUnassignedMessages(
     dto: ListCustomerMessagesDto,
   ): Promise<CustomerMessageResponse[]> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const limit = Math.min(dto?.limit ?? 40, 200);
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
         customerId: null,
         leadId: null,
+        direction: CustomerMessageDirection.INBOUND,
+        isSpam: false,
+        deletedAt: null,
       },
       include: { contact: true },
       orderBy: { createdAt: 'desc' },
@@ -475,6 +537,7 @@ export class CustomerMessagesService {
     dto: SendCustomerMessageDto,
   ): Promise<CustomerMessageResponse> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const toEmail = dto.toEmail?.trim().toLowerCase();
     if (!toEmail) {
       throw new BadRequestException(
@@ -484,17 +547,21 @@ export class CustomerMessagesService {
 
     const subject = dto.subject?.trim() ?? 'Antwort aus deinem Workspace';
     const preview = dto.preview?.trim() ?? this.buildPreview(dto.body);
-    const fromEmail =
-      dto.fromEmail?.trim() ?? this.emailService.getDefaultSender();
     const attachments = this.normalizeAttachments(dto.attachments);
 
     const smtpCredentials = await this.settingsService.getSmtpCredentials();
 
-    if (!smtpCredentials && !this.emailService.hasSmtpTransport()) {
+    if (!smtpCredentials) {
       throw new BadRequestException(
         'Es ist kein SMTP-Zugang konfiguriert. Bitte hinterlege die Zugangsdaten in den Einstellungen.',
       );
     }
+
+    const fromEmail =
+      dto.fromEmail?.trim() ??
+      smtpCredentials.fromEmail ??
+      smtpCredentials.username ??
+      undefined;
 
     const sendResult = await this.emailService.sendEmail(
       {
@@ -505,12 +572,13 @@ export class CustomerMessagesService {
         from: fromEmail,
         attachments,
       },
-      smtpCredentials ?? undefined,
+      smtpCredentials,
     );
 
     const saved = await this.prisma.customerMessage.create({
       data: {
         tenant: { connect: { id: tenantId } },
+        ownerUser: { connect: { id: userId } },
         customer: undefined,
         lead: undefined,
         contact: undefined,
@@ -541,6 +609,7 @@ export class CustomerMessagesService {
 
   async listByEmail(email: string): Promise<CustomerMessageResponse[]> {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const normalized = this.normalizeEmail(email);
     if (!normalized) {
       return [];
@@ -549,6 +618,9 @@ export class CustomerMessagesService {
     const records = await this.prisma.customerMessage.findMany({
       where: {
         tenantId,
+        ownerUserId: userId,
+        isSpam: false,
+        deletedAt: null,
         OR: [{ toEmail: normalized }, { fromEmail: normalized }],
       },
       include: { contact: true },
@@ -584,6 +656,12 @@ export class CustomerMessagesService {
       readAt: entity.readAt?.toISOString() ?? null,
       sentAt: entity.sentAt?.toISOString() ?? null,
       receivedAt: entity.receivedAt?.toISOString() ?? null,
+      isSpam: entity.isSpam ?? false,
+      category: entity.category,
+      summary: entity.summary,
+      urgency: entity.urgency,
+      sentiment: entity.sentiment,
+      analyzedAt: entity.analyzedAt?.toISOString() ?? null,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
     };
@@ -595,6 +673,14 @@ export class CustomerMessagesService {
       throw new BadRequestException('Tenant-Kontext fehlt.');
     }
     return tenantId;
+  }
+
+  private requireUserId(): string {
+    const userId = this.context.getUserId();
+    if (!userId) {
+      throw new BadRequestException('Benutzer-Kontext fehlt.');
+    }
+    return userId;
   }
 
   private buildLeadInitialMessage(lead: {
@@ -700,11 +786,13 @@ export class CustomerMessagesService {
       return 0;
     }
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
 
     const result = await this.prisma.customerMessage.updateMany({
       where: {
         id: { in: uniqueIds },
         tenantId,
+        ownerUserId: userId,
         readAt: null,
       },
       data: {
@@ -715,15 +803,33 @@ export class CustomerMessagesService {
     return result.count ?? 0;
   }
 
+  async moveMessagesToTrash(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (!uniqueIds.length) {
+      return 0;
+    }
+    const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
+    const result = await this.prisma.customerMessage.updateMany({
+      where: { id: { in: uniqueIds }, tenantId, ownerUserId: userId },
+      data: { deletedAt: new Date() },
+    });
+    return result.count ?? 0;
+  }
+
   async getUnreadSummary() {
     const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
     const unassigned = await this.prisma.customerMessage.count({
       where: {
         tenantId,
+        ownerUserId: userId,
         customerId: null,
         leadId: null,
         direction: CustomerMessageDirection.INBOUND,
+        isSpam: false,
         readAt: null,
+        deletedAt: null,
       },
     });
 
@@ -731,9 +837,12 @@ export class CustomerMessagesService {
       by: ['leadId'],
       where: {
         tenantId,
+        ownerUserId: userId,
         leadId: { not: null },
         direction: CustomerMessageDirection.INBOUND,
+        isSpam: false,
         readAt: null,
+        deletedAt: null,
       },
       _count: { _all: true },
     });

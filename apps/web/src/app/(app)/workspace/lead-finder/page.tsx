@@ -190,15 +190,18 @@ Bitte gib die Antwort als kompaktes JSON-Objekt im Format:
       }
 
       const parsedLeads: LeadInsight[] = Array.isArray((parsed as { leads?: unknown }).leads)
-        ? ((parsed as { leads: unknown[] }).leads || []).map((item) => ({
-            company: typeof (item as Record<string, unknown>).company === "string" ? (item as Record<string, unknown>).company : "",
-            website: typeof (item as Record<string, unknown>).website === "string" ? (item as Record<string, unknown>).website : undefined,
-            email: typeof (item as Record<string, unknown>).email === "string" ? (item as Record<string, unknown>).email : undefined,
-            phone: typeof (item as Record<string, unknown>).phone === "string" ? (item as Record<string, unknown>).phone : undefined,
-            location: typeof (item as Record<string, unknown>).location === "string" ? (item as Record<string, unknown>).location : undefined,
-            postalCode: typeof (item as Record<string, unknown>).postalCode === "string" ? (item as Record<string, unknown>).postalCode : undefined,
-            reason: typeof (item as Record<string, unknown>).reason === "string" ? (item as Record<string, unknown>).reason : undefined,
-          }))
+        ? ((parsed as { leads: unknown[] }).leads || []).map((item) => {
+            const record = item as Record<string, unknown>;
+            const company = typeof record.company === "string" ? record.company : "";
+            const website = typeof record.website === "string" ? record.website : undefined;
+            const email = typeof record.email === "string" ? record.email : undefined;
+            const phone = typeof record.phone === "string" ? record.phone : undefined;
+            const location = typeof record.location === "string" ? record.location : undefined;
+            const postalCode = typeof record.postalCode === "string" ? record.postalCode : undefined;
+            const reason = typeof record.reason === "string" ? record.reason : undefined;
+
+            return { company, website, email, phone, location, postalCode, reason };
+          })
         : [];
 
       const normalized = parsedLeads

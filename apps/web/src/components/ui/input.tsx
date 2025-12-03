@@ -7,6 +7,8 @@ const baseStyles =
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   invalid?: boolean;
+  "data-lpignore"?: string;
+  "data-1p-ignore"?: string;
 };
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(

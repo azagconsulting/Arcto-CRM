@@ -183,7 +183,7 @@ export interface CustomerListResponse {
 export type CustomerMessageDirection = "INBOUND" | "OUTBOUND";
 
 export type CustomerMessageStatus = "DRAFT" | "QUEUED" | "SENDING" | "SENT" | "FAILED";
-export type MessageCategory = "ANGEBOT" | "KRITISCH" | "KUENDIGUNG" | "WERBUNG" | "SONSTIGES";
+export type MessageCategory = "ANGEBOT" | "KOSTENVORANSCHLAG" | "KRITISCH" | "KUENDIGUNG" | "WERBUNG" | "SONSTIGES";
 
 export interface CustomerMessageContact {
   id: string;
@@ -216,8 +216,11 @@ export interface CustomerMessage {
   readAt?: string | null;
   sentAt?: string | null;
   receivedAt?: string | null;
+  isSpam?: boolean | null;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  ownerUserId?: string | null;
   
   // AI Analysis
   category?: MessageCategory | null;
@@ -225,6 +228,16 @@ export interface CustomerMessage {
   urgency?: string | null;
   summary?: string | null;
   analyzedAt?: string | null;
+}
+
+export interface MessageAnalysisSettings {
+  enabled: boolean;
+  updatedAt?: string;
+}
+
+export interface OpenAiSettings {
+  hasApiKey: boolean;
+  updatedAt?: string;
 }
 
 export interface CustomerMessageListResponse {
@@ -255,6 +268,17 @@ export interface SmtpSettings {
   updatedAt: string;
 }
 
+export interface ContactSmtpSettings {
+  host: string;
+  port: number;
+  username: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  encryption: SmtpEncryption;
+  hasPassword: boolean;
+  updatedAt?: string;
+}
+
 export type ImapEncryption = "none" | "ssl" | "tls";
 
 export interface ImapSettings {
@@ -262,6 +286,7 @@ export interface ImapSettings {
   port: number;
   username: string;
   mailbox: string;
+  spamMailbox?: string | null;
   encryption: ImapEncryption;
   hasPassword: boolean;
   sinceDays?: number;

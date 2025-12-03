@@ -5,11 +5,11 @@ import { SettingsModule } from '../settings/settings.module';
 import { UsersModule } from '../users/users.module';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
-import { PublicLeadsController } from './public-leads.controller';
+import { PublicContactController } from './public-contact.controller';
 
 @Module({
   imports: [UsersModule, MailerModule, SettingsModule],
-  controllers: [LeadsController, PublicLeadsController],
+  controllers: [LeadsController, PublicContactController],
   providers: [LeadsService],
   exports: [LeadsService],
 })

@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
 
 export function Markdown({ children }: { children: string }) {
@@ -22,7 +23,7 @@ export function Markdown({ children }: { children: string }) {
             className="overflow-x-auto rounded-2xl border border-white/10 bg-black/60 p-4 text-sm"
           />
         ),
-        code: ({ inline, ...props }) =>
+        code: ({ inline, ...props }: { inline?: boolean } & ComponentProps<"code">) =>
           inline ? (
             <code {...props} className="rounded bg-white/10 px-1 py-0.5 text-sm text-white" />
           ) : (

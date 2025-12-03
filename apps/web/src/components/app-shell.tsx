@@ -51,6 +51,7 @@ interface NavigationItem {
 }
 
 const MESSAGE_COUNTS_KEY = "workspace/messages/unread-total";
+const MESSAGE_REFRESH_INTERVAL = 60_000;
 
 const navigationBase: NavigationItem[] = [
   {

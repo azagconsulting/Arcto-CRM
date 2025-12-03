@@ -82,6 +82,7 @@ enum CustomerMessageStatus {
 
 enum MessageCategory {
   ANGEBOT
+  KOSTENVORANSCHLAG
   KRITISCH
   KUENDIGUNG
   WERBUNG
@@ -147,6 +148,7 @@ model User {
   blogPosts        BlogPost[]
   tasksAssigned    Task[]      @relation("TaskAssignee")
   tasksCreated     Task[]      @relation("TaskCreator")
+  ownedMessages    CustomerMessage[] @relation("MessageOwner")
 
   @@index([tenantId])
 }
@@ -322,11 +324,13 @@ model CustomerActivity {
 model CustomerMessage {
   id          String                  @id @default(uuid())
   tenantId    String
+  ownerUserId String?
   customerId  String?
   leadId      String?
   contactId   String?
   direction   CustomerMessageDirection
   status      CustomerMessageStatus    @default(SENT)
+  isSpam      Boolean                  @default(false)
   subject     String?                  @db.VarChar(191)
   preview     String?                  @db.VarChar(255)
   body        String                   @db.Text
@@ -346,11 +350,13 @@ model CustomerMessage {
   urgency     String?                 @db.VarChar(64)
   summary     String?                 @db.VarChar(512)
   analyzedAt  DateTime?
+  deletedAt   DateTime?
 
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer?       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   lead     Lead?           @relation(fields: [leadId], references: [id], onDelete: Cascade)
   contact  CustomerContact? @relation(fields: [contactId], references: [id])
+  ownerUser User?           @relation("MessageOwner", fields: [ownerUserId], references: [id])
 
   @@index([customerId, createdAt])
   @@index([contactId])
@@ -358,6 +364,9 @@ model CustomerMessage {
   @@index([analyzedAt])
   @@index([tenantId])
   @@index([tenantId, direction, createdAt])
+  @@index([tenantId, isSpam, createdAt])
+  @@index([tenantId, ownerUserId])
+  @@index([tenantId, deletedAt])
 }
 
 model TenantSetting {

@@ -45,7 +45,7 @@ function createSessionId() {
   return `sess_${Math.random().toString(36).slice(2, 11)}`;
 }
 
-function formatDurationMs(startedAt?: number) {
+function formatDurationMs(startedAt?: number | null) {
   if (!startedAt) return null;
   const diff = Date.now() - startedAt;
   if (diff < 150) return null;

@@ -6,6 +6,7 @@ export interface ImapCredentials {
   username: string;
   password: string;
   mailbox: string;
+  spamMailbox?: string | null;
   encryption: ImapEncryption;
   sinceDays?: number;
   verifiedAt?: string | null;
@@ -16,6 +17,7 @@ export interface ImapSettingsResponse {
   port: number;
   username: string;
   mailbox: string;
+  spamMailbox?: string | null;
   encryption: ImapEncryption;
   hasPassword: boolean;
   sinceDays?: number;

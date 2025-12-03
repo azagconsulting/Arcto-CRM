@@ -18,6 +18,8 @@ export interface SendEmailOptions {
   text: string;
   html?: string;
   from?: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
   attachments?: EmailAttachment[];
 }
 
@@ -86,6 +88,8 @@ export class EmailService {
       subject: options.subject,
       text: options.text,
       html: options.html,
+      headers: options.headers,
+      replyTo: options.replyTo,
       attachments: options.attachments?.length
         ? options.attachments
         : undefined,

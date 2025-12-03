@@ -3,8 +3,8 @@ import type { ButtonHTMLAttributes } from "react";
 import { forwardRef } from "react";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost";
-  size?: "sm" | "md" | "lg";
+  variant?: "primary" | "secondary" | "ghost" | "outline";
+  size?: "sm" | "md" | "lg" | "icon";
 };
 
 const baseStyles =
@@ -17,12 +17,15 @@ const variantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "bg-white/10 text-white hover:bg-white/20 active:bg-white/30 border border-white/20",
   ghost:
     "bg-transparent text-white hover:bg-white/10 active:bg-white/15 border border-white/10",
+  outline:
+    "bg-transparent text-white border border-white/20 hover:bg-white/10 active:bg-white/15",
 };
 
 const sizeStyles: Record<NonNullable<ButtonProps["size"]>, string> = {
   sm: "px-4 py-2 text-sm",
   md: "px-5 py-2.5 text-sm",
   lg: "px-6 py-3 text-base",
+  icon: "h-10 w-10 p-0",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

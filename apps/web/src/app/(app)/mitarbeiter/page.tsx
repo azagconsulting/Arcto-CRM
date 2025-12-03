@@ -285,7 +285,7 @@ export default function MitarbeiterPage() {
   const [showAccessSection, setShowAccessSection] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<AuthUser | null>(null);
   const [highlightAccess, setHighlightAccess] = useState(false);
-  const accessSectionRef = useRef<HTMLDivElement | null>(null);
+  const accessSectionRef = useRef<HTMLDivElement>(null!);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>("default");
   const [tasksByBoard, setTasksByBoard] = useState<Record<TaskBoard, Task[]>>({ TEAM: [], MY: [] });
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -649,7 +649,7 @@ export default function MitarbeiterPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => {
                 setTaskForm((f) => ({ ...initialTaskForm, board: activeBoard, assigneeId: f.assigneeId }));

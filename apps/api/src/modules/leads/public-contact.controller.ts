@@ -1,19 +1,19 @@
 import { Body, Controller, Post } from '@nestjs/common';
 
 import { Public } from '../auth/decorators/public.decorator';
+import { ContactRequestDto } from './dto/contact-request.dto';
 import { LeadsService } from './leads.service';
-import { CreateLeadDto } from './dto/create-lead.dto';
 
 @Controller({
-  path: 'public/leads',
+  path: 'public/contact',
   version: '1',
 })
-export class PublicLeadsController {
+export class PublicContactController {
   constructor(private readonly leadsService: LeadsService) {}
 
   @Public()
   @Post()
-  create(@Body() dto: CreateLeadDto) {
-    return this.leadsService.createFromLanding(dto);
+  create(@Body() dto: ContactRequestDto) {
+    return this.leadsService.sendContactRequest(dto);
   }
 }

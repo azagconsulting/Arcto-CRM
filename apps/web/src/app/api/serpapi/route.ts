@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    const organic = Array.isArray(data?.organic_results)
+    const organic: Array<{ title: string; link: string; snippet?: string; position?: number }> = Array.isArray(
+      data?.organic_results,
+    )
       ? data.organic_results.map((item: Record<string, unknown>) => ({
           title: String(item.title ?? ""),
           link: String(item.link ?? ""),

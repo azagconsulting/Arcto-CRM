@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -34,9 +35,13 @@ export default function RootLayout({
     <html lang="de" suppressHydrationWarning>
       <body className={`${fontSans.variable} antialiased`}>
         <ThemeProvider>
-          <TrackingProvider />
+          <Suspense fallback={null}>
+            <TrackingProvider />
+          </Suspense>
           <NotificationProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <Suspense fallback={null}>
+              <AuthProvider>{children}</AuthProvider>
+            </Suspense>
           </NotificationProvider>
         </ThemeProvider>
       </body>

@@ -78,7 +78,7 @@ export default function Home() {
           <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-6">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.4em] text-slate-300">
-                Neu: Arcto-CRM
+                Arcto Labs
                 <ShieldCheck className="h-4 w-4" />
               </span>
               <h1 className="text-balance text-4xl font-semibold text-white sm:text-5xl">
@@ -102,20 +102,6 @@ export default function Home() {
             </div>
             <div className="space-y-6">
               <LandingAuthPanel />
-              <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_25px_60px_rgba(15,23,42,0.45)]">
-                <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Status</p>
-                <p className="text-2xl font-semibold text-white">Prisma ready</p>
-                <p className="mt-2 text-sm text-slate-400">
-                  NestJS API + Prisma Schema sind angeschlossen. Frontend wartet auf erste Entitäten.
-                </p>
-                <div className="mt-6 space-y-3">
-                  {checklist.map((item) => (
-                    <p key={item} className="flex items-center gap-2 text-sm text-slate-200">
-                      <CheckCircle2 className="h-4 w-4 text-sky-300" /> {item}
-                    </p>
-                  ))}
-                </div>
-              </div>
             </div>
           </section>
 

@@ -12,7 +12,6 @@ import { clsx } from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CustomerMessage, Lead, SmtpSettings, Customer, CustomerContact } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
-import { OPENAI_KEY_STORAGE } from "@/lib/constants";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +40,12 @@ interface ComposerModalProps {
   messageToReplyTo?: CustomerMessage | null;
   smtpReady: boolean;
   smtpStatus: string | null;
+  contactSuggestions?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+    customerName?: string | null;
+  }[];
 }
 
 export function ComposerModal({
@@ -53,8 +58,10 @@ export function ComposerModal({
   messageToReplyTo,
   smtpReady,
   smtpStatus,
+  contactSuggestions = [],
 }: ComposerModalProps) {
-  const { authorizedRequest } = useAuth();
+  const { authorizedRequest, user } = useAuth();
+  const STORAGE_KEY = "workspace/messages/composer-state";
   const [composer, setComposer] = useState<ComposerState>({
     contactId: "",
     toEmail: "",
@@ -71,17 +78,117 @@ export function ComposerModal({
   const [aiChatInput, setAiChatInput] = useState("");
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const lastInitKeyRef = useRef<string | null>(null);
+  const mountedRef = useRef(false);
+  const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [contactHover, setContactHover] = useState(0);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setOpenAiKey(window.localStorage.getItem(OPENAI_KEY_STORAGE));
-    }
-  }, []);
+    let mounted = true;
+    const controller = new AbortController();
+    authorizedRequest<{ hasApiKey: boolean; apiKey?: string | null }>("/settings/openai", {
+      signal: controller.signal,
+    })
+      .then((data) => {
+        if (!mounted) return;
+        const key = data?.apiKey?.trim() || null;
+        setOpenAiKey(key);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [authorizedRequest]);
 
   const attachmentsRef = useRef<AttachmentItem[]>([]);
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
+
+  const normalizedSuggestions = useMemo(() => {
+    const map = new Map<string, { id?: string; name?: string | null; email: string; customerName?: string | null }>();
+    contactSuggestions?.forEach((item) => {
+      const email = item.email?.trim().toLowerCase();
+      if (!email) return;
+      if (!map.has(email)) {
+        map.set(email, {
+          id: item.id,
+          name: item.name,
+          email,
+          customerName: item.customerName,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [contactSuggestions]);
+
+  const filteredContacts = useMemo(() => {
+    const query = composer.toEmail.trim().toLowerCase();
+    if (!query) return [];
+    return normalizedSuggestions
+      .filter(
+        (item) =>
+          item.email.includes(query) ||
+          (item.name?.toLowerCase().includes(query)) ||
+          (item.customerName?.toLowerCase().includes(query)),
+      )
+      .slice(0, 8);
+  }, [composer.toEmail, normalizedSuggestions]);
+
+  useEffect(() => {
+    setContactHover(0);
+  }, [composer.toEmail]);
+
+  // Restore persisted draft on first mount
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { composer?: ComposerState };
+      if (parsed?.composer) {
+        setComposer(parsed.composer);
+      }
+    } catch {
+      // ignore corrupted draft
+    }
+  }, []);
+
+// Persist draft while typing/attaching
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ composer }),
+      );
+    } catch {
+      // ignore storage write errors
+    }
+  }, [composer]);
+
+  const clearDraft = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  const handleSelectContactSuggestion = useCallback(
+    (suggestion: { id?: string; email: string }) => {
+      setComposer((prev) => ({
+        ...prev,
+        toEmail: suggestion.email,
+        contactId: suggestion.id ?? "",
+      }));
+      setContactMenuOpen(false);
+      setContactHover(0);
+    },
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -91,10 +198,26 @@ export function ComposerModal({
 
   useEffect(() => {
     if (!isOpen) {
+      wasOpenRef.current = false;
       setComposerNotice(null);
       setAiError(null);
+      setContactMenuOpen(false);
       return;
     }
+
+    const initKey = [
+      messageToReplyTo?.id ?? "",
+      customer?.id ?? "",
+      lead?.id ?? "",
+    ].join("|");
+
+    if (wasOpenRef.current && lastInitKeyRef.current === initKey) {
+      // Already initialized for this context; do not wipe user input on refresh.
+      return;
+    }
+
+    wasOpenRef.current = true;
+    lastInitKeyRef.current = initKey;
 
     const recipient = messageToReplyTo?.fromEmail ?? lead?.email ?? customer?.contacts?.[0]?.email ?? "";
     const subject = messageToReplyTo?.subject
@@ -111,7 +234,9 @@ export function ComposerModal({
       body: quotedBody,
     });
     setAttachments([]);
-  }, [isOpen, customer, lead, messageToReplyTo]);
+    clearDraft();
+    setContactMenuOpen(false);
+  }, [isOpen, customer?.id, lead?.id, messageToReplyTo?.id, clearDraft]);
 
   const handleAttachmentSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -203,6 +328,7 @@ export function ComposerModal({
 
       onMessageSent(response);
       setComposerNotice({ type: "success", text: "Nachricht gesendet!" });
+      clearDraft();
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -211,7 +337,7 @@ export function ComposerModal({
     } finally {
       setSending(false);
     }
-  }, [smtpReady, attachments, composer, lead, customer, authorizedRequest, readFileAsBase64, onMessageSent, onClose]);
+  }, [smtpReady, attachments, composer, lead, customer, authorizedRequest, readFileAsBase64, onMessageSent, onClose, clearDraft]);
 
   // ... AI handlers here
   const selectedContact = useMemo(() => {
@@ -236,23 +362,46 @@ export function ComposerModal({
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }, [thread]);
+  const lastInboundFromThread = useMemo(() => {
+    const targetEmail = composer.toEmail.trim().toLowerCase();
+    const inbound = [...orderedThread]
+      .filter((msg) => msg.direction === "INBOUND")
+      .reverse();
+    const matchByEmail = targetEmail
+      ? inbound.find((msg) => msg.fromEmail?.toLowerCase() === targetEmail)
+      : null;
+    return matchByEmail ?? inbound[0] ?? null;
+  }, [orderedThread, composer.toEmail]);
+
+  const senderDisplayName = useMemo(() => {
+    const full = `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim();
+    return full || user?.email || "Ihr Team";
+  }, [user?.email, user?.firstName, user?.lastName]);
+
+  const appendClosing = useCallback(
+    (text: string) => {
+      const closing = `\n\nFreundliche Grüße\n${senderDisplayName}`;
+      if (!text) return closing.trim();
+      if (text.toLowerCase().includes("freundliche grüße")) {
+        return text;
+      }
+      return `${text.trim()}\n${closing}`;
+    },
+    [senderDisplayName],
+  );
 
   const handleGenerateAi = useCallback(async () => {
     if (!openAiKey) {
       setAiError("Bitte hinterlege zuerst deinen OpenAI-Key in den Einstellungen.");
       return;
     }
-    if (isUnassignedView) {
-      setAiError("Bitte wähle einen Kunden oder eine Anfrage, um den KI-Assistenten zu nutzen.");
-      return;
-    }
     setAiLoading(true);
     setAiError(null);
     try {
-      const history = orderedThread
-        .slice(-6)
-        .map((message) => `${message.direction === "INBOUND" ? "Kunde" : "CSM"}: ${message.body}`)
-        .join("\n---\n");
+      const lastInbound = lastInboundFromThread;
+      const history = lastInbound
+        ? `${lastInbound.direction === "INBOUND" ? "Letzte Nachricht vom Kontakt" : "Letzte gesendete Nachricht"}:\n${lastInbound.body}`
+        : "Keine letzte Nachricht gefunden.";
       const contactName = lead?.fullName ?? selectedContact?.name ?? customer?.name ?? "Kontakt";
       const prompt = `Du bist Customer Success Manager:in bei Arcto. Verfasse eine prägnante, empathische Antwort per E-Mail an ${contactName}. Betreff: ${composer.subject}\nKontext:\n${history || "Der Kontakt wartet auf ein Update."}\nDie Antwort darf maximal 220 Wörter haben und sollte mit einer freundlichen Grußformel enden.`;
 
@@ -265,13 +414,13 @@ export function ComposerModal({
       const body = await response.json();
       const content = body?.choices?.[0]?.message?.content?.trim();
       if (!content) throw new Error("Keine Antwort von OpenAI erhalten.");
-      setComposer((current) => ({ ...current, body: content }));
+      setComposer((current) => ({ ...current, body: appendClosing(content) }));
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "KI-Antwort konnte nicht erzeugt werden.");
     } finally {
       setAiLoading(false);
     }
-  }, [openAiKey, isUnassignedView, orderedThread, lead, selectedContact, customer, composer.subject]);
+  }, [openAiKey, lastInboundFromThread, lead, selectedContact, customer, composer.subject, appendClosing]);
 
   const handleAiCreateWithPrompt = useCallback(async (promptInput: string) => {
     if (!openAiKey) {
@@ -294,14 +443,14 @@ export function ComposerModal({
       const body = await response.json();
       const content = body?.choices?.[0]?.message?.content?.trim();
       if (!content) throw new Error("Keine Antwort von OpenAI erhalten.");
-      setComposer((current) => ({ ...current, body: content }));
+      setComposer((current) => ({ ...current, body: appendClosing(content) }));
       setAiChatMode(null);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "KI-Antwort konnte nicht erzeugt werden.");
     } finally {
       setAiLoading(false);
     }
-  }, [openAiKey, lead, selectedContact, customer, composer.toEmail, composer.subject]);
+  }, [openAiKey, lead, selectedContact, customer, composer.toEmail, composer.subject, appendClosing]);
 
   const handleAiEditWithPrompt = useCallback(async (promptInput: string) => {
     if (!openAiKey) {
@@ -357,13 +506,64 @@ export function ComposerModal({
                 ))}
               </select>
             ) : (
-              <Input
-                type="email"
-                placeholder="Empfänger-E-Mail"
-                value={composer.toEmail}
-                onChange={(e) => setComposer({ ...composer, toEmail: e.target.value })}
-                className="text-sm"
-              />
+              <div className="relative">
+                <Input
+                  type="email"
+                  placeholder="Empfänger-E-Mail"
+                  value={composer.toEmail}
+                  onFocus={() => setContactMenuOpen(true)}
+                  onChange={(e) => {
+                    setComposer({ ...composer, toEmail: e.target.value, contactId: "" });
+                    setContactMenuOpen(true);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setContactMenuOpen(false), 100);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!filteredContacts.length) return;
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setContactHover((prev) => (prev + 1) % filteredContacts.length);
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setContactHover((prev) => (prev - 1 + filteredContacts.length) % filteredContacts.length);
+                    } else if (e.key === "Enter") {
+                      const target = filteredContacts[contactHover];
+                      if (target) {
+                        e.preventDefault();
+                        handleSelectContactSuggestion(target);
+                      }
+                    } else if (e.key === "Escape") {
+                      setContactMenuOpen(false);
+                    }
+                  }}
+                  className="text-sm"
+                />
+                {contactMenuOpen && filteredContacts.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-xl border border-white/10 bg-slate-900/95 shadow-lg backdrop-blur">
+                    {filteredContacts.map((item, index) => (
+                      <button
+                        key={`${item.email}-${index}`}
+                        type="button"
+                        onMouseEnter={() => setContactHover(index)}
+                        onClick={() => handleSelectContactSuggestion(item)}
+                        className={clsx(
+                          "w-full px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/5",
+                          contactHover === index && "bg-white/10",
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate font-medium">{item.name || item.customerName || item.email}</span>
+                          {item.customerName && (
+                            <span className="truncate text-xs text-slate-400">{item.customerName}</span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-slate-400">{item.email}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -434,10 +634,10 @@ export function ComposerModal({
                 <Button variant="secondary" size="sm" onClick={() => { handleGenerateAi(); setAiChatMode(null); }} disabled={!messageToReplyTo || aiLoading}>
                     {aiLoading && !aiChatMode ? <Loader2 className="h-4 w-4 animate-spin" /> : "Auto-Antwort"}
                 </Button>
-                <Button variant={aiChatMode === 'create' ? 'default' : 'secondary'} size="sm" onClick={() => setAiChatMode(aiChatMode === 'create' ? null : 'create')}>
+                <Button variant={aiChatMode === 'create' ? 'primary' : 'secondary'} size="sm" onClick={() => setAiChatMode(aiChatMode === 'create' ? null : 'create')}>
                     Entwurf erstellen
                 </Button>
-                <Button variant={aiChatMode === 'edit' ? 'default' : 'secondary'} size="sm" onClick={() => setAiChatMode(aiChatMode === 'edit' ? null : 'edit')} disabled={!composer.body}>
+                <Button variant={aiChatMode === 'edit' ? 'primary' : 'secondary'} size="sm" onClick={() => setAiChatMode(aiChatMode === 'edit' ? null : 'edit')} disabled={!composer.body}>
                     Text überarbeiten
                 </Button>
             </div>

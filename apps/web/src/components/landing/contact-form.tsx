@@ -3,8 +3,6 @@
 import { CheckCircle2, Loader2, SendHorizontal } from "lucide-react";
 import { useState } from "react";
 
-type LeadPriority = "LOW" | "MEDIUM" | "HIGH";
-
 import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +14,6 @@ interface FormState {
   company: string;
   phone: string;
   message: string;
-  priority: LeadPriority;
 }
 
 const defaultState: FormState = {
@@ -25,7 +22,6 @@ const defaultState: FormState = {
   company: "",
   phone: "",
   message: "",
-  priority: "MEDIUM",
 };
 
 export function ContactForm() {
@@ -44,7 +40,7 @@ export function ContactForm() {
     setStatus("submitting");
 
     try {
-      await apiRequest("/public/leads", {
+      await apiRequest("/public/contact", {
         method: "POST",
         body: JSON.stringify({
           ...form,
@@ -67,7 +63,7 @@ export function ContactForm() {
         <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Kontakt</p>
         <h2 className="text-2xl font-semibold text-white">Direkt in die Pipeline</h2>
         <p className="text-sm text-slate-400">
-          Jede Anfrage landet als Lead im Dashboard. Priorität wählen, absenden, weiter geht&apos;s.
+          Jede Anfrage wird direkt per E-Mail zugestellt und bestätigt. Kein CRM-Eintrag.
         </p>
       </div>
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -126,37 +122,17 @@ export function ContactForm() {
             disabled={disabled}
           />
         </div>
-        <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-          <div>
-            <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Priorität</label>
-            <select
-              className="w-full rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 text-sm text-white focus:border-sky-400 focus:outline-none"
-              value={form.priority}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  priority: event.target.value as LeadPriority,
-                }))
-              }
-              disabled={disabled}
-            >
-              <option value="LOW">Niedrig</option>
-              <option value="MEDIUM">Standard</option>
-              <option value="HIGH">Hoch</option>
-            </select>
-          </div>
-          <Button type="submit" disabled={disabled} className="h-full">
-            {status === "submitting" ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Wird gesendet
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <SendHorizontal className="h-4 w-4" /> Absenden
-              </span>
-            )}
-          </Button>
-        </div>
+        <Button type="submit" disabled={disabled} className="h-full w-full">
+          {status === "submitting" ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Wird gesendet
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <SendHorizontal className="h-4 w-4" /> Absenden
+            </span>
+          )}
+        </Button>
         {error && <p className="text-sm text-rose-300">{error}</p>}
         {status === "success" && (
           <p className="flex items-center gap-2 text-sm text-emerald-300">

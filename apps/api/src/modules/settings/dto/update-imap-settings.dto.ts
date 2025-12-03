@@ -39,6 +39,10 @@ export class UpdateImapSettingsDto {
   mailbox?: string;
 
   @IsOptional()
+  @IsString()
+  spamMailbox?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(365)

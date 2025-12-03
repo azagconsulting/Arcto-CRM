@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   AlertTriangle,
   Loader2,
@@ -5,18 +6,21 @@ import {
   Paperclip,
   ArrowLeft,
   Reply,
+  Folder,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { CustomerMessage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { formatTimestamp, detectUrgency, formatAttachmentSize } from "./page"; // Assuming export from page.tsx
+import { formatTimestamp, detectUrgency, formatAttachmentSize, getCategoryMeta } from "./page"; // Assuming export from page.tsx
 
 interface MessageViewProps {
   messages: CustomerMessage[];
   loading: boolean;
   error: string | null;
   onBack: () => void;
-  onReply: (message?: CustomerMessage) => void;
+  onReply: (message: CustomerMessage) => void;
+  onMoveToFolder: (message: CustomerMessage, folder: string) => void;
+  folders: string[];
   title: string;
   description: string;
 }
@@ -27,22 +31,33 @@ export function MessageView({
   error,
   onBack,
   onReply,
+  onMoveToFolder,
+  folders,
   title,
   description,
 }: MessageViewProps) {
+  const [openFolderMenuFor, setOpenFolderMenuFor] = useState<string | null>(null);
+
   return (
-    <div className="flex h-full flex-col gap-4 rounded-3xl border border-white/5 bg-white/5 p-4">
-      <div className="flex items-center justify-between border-b border-white/10 pb-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden rounded-3xl border bg-[var(--panel-bg)] p-4 border-[color:var(--panel-border)] shadow-[var(--panel-shadow)]">
+      <div className="flex items-center justify-between border-b border-[color:var(--panel-border)] pb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
-            <p className="text-sm text-slate-400">{description}</p>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+            <p className="text-sm text-[var(--text-secondary)]">{description}</p>
           </div>
         </div>
-        <Button onClick={() => onReply(messages[0])} disabled={!messages.length}>
+        <Button
+          onClick={() => {
+            const firstMessage = messages[0];
+            if (!firstMessage) return;
+            onReply(firstMessage);
+          }}
+          disabled={!messages.length}
+        >
           <Reply className="mr-2 h-4 w-4" />
           Antworten
         </Button>
@@ -50,7 +65,7 @@ export function MessageView({
 
       {loading && (
         <div className="flex h-full items-center justify-center">
-          <p className="flex items-center gap-2 text-sm text-slate-300">
+          <p className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             <Loader2 className="h-4 w-4 animate-spin" /> Verlauf wird geladen...
           </p>
         </div>
@@ -76,36 +91,61 @@ export function MessageView({
           const metaLine = isOutbound
             ? `Gesendet an ${message.toEmail ?? message.contact?.name ?? "Kontakt"}`
             : `Empfangen von ${message.fromEmail ?? message.contact?.name ?? "Kontakt"}`;
-          
+
           const urgency = detectUrgency(message);
+          const categoryMeta = getCategoryMeta(message.category);
           const date = formatTimestamp(message.sentAt ?? message.receivedAt ?? message.createdAt);
 
+          const pillBase =
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]";
+
           return (
-            <div key={message.id} className={clsx("flex", isOutbound ? "justify-end" : "justify-start")}>
+            <div
+              key={message.id}
+              className={clsx(
+                "flex w-full gap-3",
+                isOutbound ? "justify-end" : "justify-start",
+              )}
+            >
               <div
                 className={clsx(
-                  "max-w-2xl rounded-3xl border px-5 py-4 text-sm shadow-lg",
+                  "max-w-2xl flex-1 rounded-3xl border px-5 py-4 text-sm shadow-[0_25px_80px_-35px_rgba(0,0,0,0.7)] transition",
                   isOutbound
-                    ? "border-sky-400/40 bg-sky-500/15 text-white"
-                    : "border-white/10 bg-white/5 text-slate-100"
+                    ? "border-sky-400/30 bg-gradient-to-br from-sky-500/20 via-indigo-500/15 to-slate-900/60 text-[var(--text-primary)]"
+                    : "border-white/10 bg-gradient-to-br from-slate-900/70 via-slate-900/40 to-slate-800/60 text-[var(--text-primary)]"
                 )}
               >
-                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-slate-300">
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    {isOutbound ? "Outbound" : "Inbound"}
-                  </span>
-                  <span className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-secondary)]">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={clsx(
+                        pillBase,
+                        isOutbound
+                          ? "border border-white/20 bg-white/10 text-white"
+                          : "border border-white/10 bg-white/5 text-white",
+                      )}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {isOutbound ? "Outbound" : "Empfangen"}
+                    </span>
+                    {categoryMeta && (
+                      <span className={clsx(pillBase, categoryMeta.className)}>
+                        {categoryMeta.label}
+                      </span>
+                    )}
                     {urgency && (
-                      <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                      <span className="inline-flex items-center rounded-full bg-amber-500/25 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-100">
                         {urgency}
                       </span>
                     )}
-                    {date}
-                  </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-300">{date}</div>
                 </div>
-                {message.subject && <p className="mt-2 text-sm font-semibold text-white">{message.subject}</p>}
-                <p className="mt-2 whitespace-pre-line text-sm text-slate-100">{message.body}</p>
+                {message.subject && <p className="mt-3 text-sm font-semibold text-white">{message.subject}</p>}
+                {message.summary && (
+                  <p className="mt-1 text-xs text-slate-200 opacity-90">{message.summary}</p>
+                )}
+                <p className="mt-3 whitespace-pre-line text-sm text-slate-100 leading-relaxed">{message.body}</p>
                 {message.attachments?.length ? (
                   <div className="mt-3 space-y-2">
                     {message.attachments.map((attachment, index) => {
@@ -131,6 +171,51 @@ export function MessageView({
                 ) : null}
                 <p className="mt-3 text-xs text-slate-400">{metaLine}</p>
               </div>
+              {!isOutbound && (
+                <div className="flex w-10 flex-col items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+                    onClick={() => onReply(message)}
+                    aria-label="Antworten"
+                  >
+                    <Reply className="h-4 w-4" />
+                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+                      onClick={() =>
+                        setOpenFolderMenuFor((prev) => (prev === message.id ? null : message.id))
+                      }
+                      aria-label="In Ordner verschieben"
+                    >
+                      <Folder className="h-4 w-4" />
+                    </button>
+                    {openFolderMenuFor === message.id && (
+                      <div className="absolute right-12 top-0 z-10 mt-0 w-44 rounded-xl border border-white/10 bg-slate-900/95 p-2 text-[12px] shadow-xl">
+                        {folders.length === 0 && (
+                          <p className="px-1 py-1 text-slate-400">Kein Ordner vorhanden.</p>
+                        )}
+                        {folders.map((folder) => (
+                          <button
+                            key={folder}
+                            type="button"
+                            onClick={() => {
+                              onMoveToFolder(message, folder);
+                              setOpenFolderMenuFor(null);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-slate-200 hover:bg-white/10"
+                          >
+                            <Folder className="h-3.5 w-3.5" />
+                            <span className="truncate">{folder}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

@@ -275,7 +275,14 @@ Deutsch, prägnant.`;
 
   const buildCraftPdfHtml = (customer?: { name?: string; address?: string; email?: string; phone?: string }) => {
     const companyName = workspace?.companyName || workspace?.legalName || "Dein Unternehmen";
-    const companyAddress = [workspace?.street, workspace?.postalCode, workspace?.city, workspace?.country].filter(Boolean).join(" · ");
+    const companyAddress = [
+      workspace?.address?.street,
+      workspace?.address?.postalCode,
+      workspace?.address?.city,
+      workspace?.address?.country,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     const contactLine = [workspace?.supportEmail, workspace?.supportPhone].filter(Boolean).join(" · ");
     const legalLine = [workspace?.vatNumber ? `USt-Id: ${workspace.vatNumber}` : "", workspace?.registerNumber ? `HRB: ${workspace.registerNumber}` : ""]
       .filter(Boolean)
@@ -408,8 +415,8 @@ Deutsch, prägnant.`;
       "Ihre Firma";
     const fmt = (num: number) =>
       num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + currency;
-    const primary = [56, 189, 248];
-    const muted = [90, 100, 110];
+    const primary: [number, number, number] = [56, 189, 248];
+    const muted: [number, number, number] = [90, 100, 110];
 
     // Hintergrund
     doc.setFillColor(248, 250, 255);

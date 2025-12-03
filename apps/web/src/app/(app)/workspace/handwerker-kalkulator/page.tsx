@@ -133,8 +133,8 @@ export default function HandwerkerKalkulatorPage() {
       num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + currency;
 
     // Farbpalette und Hintergrund
-    const primary = [56, 189, 248]; // cyan
-    const muted = [80, 90, 100];
+    const primary: [number, number, number] = [56, 189, 248]; // cyan
+    const muted: [number, number, number] = [80, 90, 100];
     doc.setFillColor(248, 250, 255);
     doc.rect(0, 0, 210, 297, "F"); // heller Hintergrund für deutliche Änderung
 

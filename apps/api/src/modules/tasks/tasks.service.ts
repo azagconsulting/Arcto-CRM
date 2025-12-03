@@ -19,7 +19,7 @@ export class TasksService {
     private readonly context: RequestContextService,
   ) {}
 
-  private async getTenantOrThrow() {
+  private getTenantOrThrow() {
     const tenantId = this.context.getTenantId();
     if (!tenantId) {
       throw new BadRequestException('Tenant-Kontext fehlt.');
@@ -38,7 +38,7 @@ export class TasksService {
   }
 
   async list(board: TaskBoard, user?: AuthUser) {
-    const tenantId = await this.getTenantOrThrow();
+    const tenantId = this.getTenantOrThrow();
     const where: Prisma.TaskWhereInput = {
       tenantId,
       board,
@@ -59,7 +59,7 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, user?: AuthUser) {
-    const tenantId = await this.getTenantOrThrow();
+    const tenantId = this.getTenantOrThrow();
     const board = dto.board ?? TaskBoard.TEAM;
     const creatorId = user?.sub ?? null;
 
@@ -94,7 +94,7 @@ export class TasksService {
   }
 
   async update(id: string, dto: UpdateTaskDto, user?: AuthUser) {
-    const tenantId = await this.getTenantOrThrow();
+    const tenantId = this.getTenantOrThrow();
     const task = await this.prisma.task.findFirst({
       where: { id, tenantId },
       include: { assignee: true, creator: true },
@@ -152,7 +152,7 @@ export class TasksService {
   }
 
   async delete(id: string, user?: AuthUser) {
-    const tenantId = await this.getTenantOrThrow();
+    const tenantId = this.getTenantOrThrow();
     const task = await this.prisma.task.findFirst({
       where: { id, tenantId },
       select: { id: true, board: true, creatorId: true },

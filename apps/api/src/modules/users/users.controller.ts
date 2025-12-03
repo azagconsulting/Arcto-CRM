@@ -16,7 +16,6 @@ import { UsersService } from './users.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { AdminGuard } from './guards/admin.guard';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @UseGuards(AuthGuard('jwt'))

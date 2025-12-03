@@ -23,14 +23,16 @@ const allowedDevOrigins =
     .filter((value): value is string => Boolean(value));
 
 if (allowedDevOrigins.length === 0) {
-  allowedDevOrigins.push("http://localhost:3000", "http://127.0.0.1:3000");
+  allowedDevOrigins.push(
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://10.0.2.251:3000",
+  );
 }
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // Silence dev warning when accessing via 127.0.0.1 behind a proxy.
-    allowedDevOrigins,
-  },
+  // Silence dev warning when accessing via 127.0.0.1 behind a proxy.
+  allowedDevOrigins,
   async rewrites() {
     if (!proxyTarget) {
       return [];
