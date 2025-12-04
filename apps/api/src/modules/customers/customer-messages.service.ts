@@ -817,6 +817,20 @@ export class CustomerMessagesService {
     return result.count ?? 0;
   }
 
+  async restoreMessagesFromTrash(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (!uniqueIds.length) {
+      return 0;
+    }
+    const tenantId = this.requireTenantId();
+    const userId = this.requireUserId();
+    const result = await this.prisma.customerMessage.updateMany({
+      where: { id: { in: uniqueIds }, tenantId, ownerUserId: userId },
+      data: { deletedAt: null },
+    });
+    return result.count ?? 0;
+  }
+
   async getUnreadSummary() {
     const tenantId = this.requireTenantId();
     const userId = this.requireUserId();

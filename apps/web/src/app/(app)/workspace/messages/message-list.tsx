@@ -51,14 +51,14 @@ export function MessageList<T extends { id: string }>({
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">{listTitle}</h2>
         <p className="text-sm text-[var(--text-secondary)]">{listDescription}</p>
       </div>
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-start md:gap-3">
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
         <Input
           placeholder="Suchen..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="bg-[color:var(--panel-border)] text-[var(--text-primary)] placeholder:text-[color:var(--text-secondary)]"
+          className="flex-1 min-w-[200px] bg-[color:var(--panel-border)] text-[var(--text-primary)] placeholder:text-[color:var(--text-secondary)]"
         />
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
       {error && <p className="text-xs text-rose-300">{error}</p>}
       {loading && (

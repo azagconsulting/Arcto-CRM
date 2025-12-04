@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  AlertTriangle,
-  Loader2,
-  MessageSquare,
-  Paperclip,
-  ArrowLeft,
-  Reply,
-  Folder,
-} from "lucide-react";
+import { AlertTriangle, Loader2, MessageSquare, Paperclip, ArrowLeft, Reply, Folder, Trash2, UserPlus } from "lucide-react";
 import { clsx } from "clsx";
 import type { CustomerMessage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -20,6 +12,8 @@ interface MessageViewProps {
   onBack: () => void;
   onReply: (message: CustomerMessage) => void;
   onMoveToFolder: (message: CustomerMessage, folder: string) => void;
+  onMoveToTrash?: (message: CustomerMessage) => void;
+  onExtractContact?: (message: CustomerMessage) => void;
   folders: string[];
   title: string;
   description: string;
@@ -32,6 +26,8 @@ export function MessageView({
   onBack,
   onReply,
   onMoveToFolder,
+  onMoveToTrash,
+  onExtractContact,
   folders,
   title,
   description,
@@ -214,6 +210,26 @@ export function MessageView({
                       </div>
                     )}
                   </div>
+                  {onMoveToTrash && (
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-rose-500/20 hover:border-rose-400/40"
+                      onClick={() => onMoveToTrash(message)}
+                      aria-label="In Papierkorb verschieben"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  {onExtractContact && (
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-emerald-500/15 hover:border-emerald-400/40"
+                      onClick={() => onExtractContact(message)}
+                      aria-label="Kontakt aus E-Mail vorschlagen"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

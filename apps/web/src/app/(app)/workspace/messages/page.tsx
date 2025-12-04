@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, RefreshCw, Trash2, Folder, CheckSquare, Square } from "lucide-react";
+import { Mail, RefreshCw, Trash2, Folder, CheckSquare, Square, X, RotateCcw } from "lucide-react";
 import { clsx } from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,6 +23,8 @@ import { MailboxSidebar, Mailbox } from "./mailbox-sidebar";
 import { MessageList } from "./message-list";
 import { MessageView } from "./message-view";
 import { ComposerModal } from "./composer-modal";
+import type { CustomerFormState } from "../../customers/customer-modal";
+import { CustomerModal } from "../../customers/customer-modal";
 
 // Helper functions
 export const timestampFormatter = new Intl.DateTimeFormat("de-DE", {
@@ -54,18 +56,12 @@ export function detectUrgency(message?: CustomerMessage | null) {
 }
 export function getCategoryMeta(category?: CustomerMessage["category"]) {
   switch (category) {
-    case "WERBUNG":
-      return { label: "Werbung", className: "bg-amber-500/20 text-amber-200" };
     case "KUENDIGUNG":
       return { label: "Kündigung", className: "bg-rose-500/20 text-rose-200" };
     case "KRITISCH":
       return { label: "Kritisch", className: "bg-red-500/25 text-red-100" };
-    case "ANGEBOT":
-      return { label: "Angebot", className: "bg-sky-500/20 text-sky-100" };
     case "KOSTENVORANSCHLAG":
       return { label: "Kostenvoranschlag", className: "bg-indigo-500/20 text-indigo-100" };
-    case "SONSTIGES":
-      return { label: "Sonstiges", className: "bg-slate-500/20 text-slate-100" };
     default:
       return null;
   }
@@ -79,6 +75,122 @@ const FOLDER_STORAGE_KEY = "workspace/messages/folders";
 const FOLDER_ASSIGNMENTS_KEY = "workspace/messages/folder-assignments";
 const countUnreadMessages = (items: CustomerMessage[]) =>
   items.filter((msg) => msg.direction === "INBOUND" && !msg.readAt).length;
+const toTitleCase = (value?: string | null) =>
+  value ? value.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : "";
+
+const extractNameFromBody = (body?: string | null) => {
+  if (!body) return "";
+  const trimmed = body.trim();
+  if (!trimmed) return "";
+  const patterns = [
+    /mit freundlichen grüßen[,:\-\s]*([^\n]+)/i,
+    /beste[n]?\s+grüße[,:\-\s]*([^\n]+)/i,
+    /viele\s+grüße[,:\-\s]*([^\n]+)/i,
+    /grüße[,:\-\s]*([^\n]+)/i,
+    /cheers[,:\-\s]*([^\n]+)/i,
+    /thanks[,:\-\s]*([^\n]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match?.[1]) {
+      return toTitleCase(match[1].trim().replace(/[^a-zA-ZäöüÄÖÜß\s\-']/g, ""));
+    }
+  }
+  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const candidate = lines[lines.length - 1] || "";
+  if (candidate && candidate.length <= 50) {
+    return toTitleCase(candidate.replace(/[^a-zA-ZäöüÄÖÜß\s\-']/g, ""));
+  }
+  return "";
+};
+
+const extractPhoneFromBody = (body?: string | null) => {
+  if (!body) return "";
+  const matches = body.match(/\+?\d[\d\s()./-]{6,}/g);
+  if (!matches) return "";
+  const cleaned = matches
+    .map((m) => m.replace(/[^\d+]/g, ""))
+    .filter((m) => m.length >= 8);
+  if (!cleaned.length) return "";
+  cleaned.sort((a, b) => b.length - a.length);
+  return cleaned[0];
+};
+
+const extractCompany = (body?: string | null, email?: string | null) => {
+  const companyHints = [
+    "gmbh",
+    "ag",
+    "ug",
+    "ltd",
+    "inc",
+    "sarl",
+    "sas",
+    "bv",
+    "nv",
+    "llc",
+  ];
+  if (body) {
+    const lines = body
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (const line of lines) {
+      if (line.length > 60) continue;
+      const lower = line.toLowerCase();
+      if (companyHints.some((hint) => lower.includes(hint))) {
+        return toTitleCase(line.replace(/[^a-zA-ZäöüÄÖÜß\s\-\&]/g, ""));
+      }
+    }
+  }
+  if (email) {
+    const domainPart = email.split("@")[1]?.split(".")[0];
+    if (domainPart && domainPart.length > 3) {
+      return toTitleCase(domainPart.replace(/[^a-zA-ZäöüÄÖÜß\s\-\&]/g, ""));
+    }
+  }
+  return "";
+};
+
+function prefillFromMessage(msg: CustomerMessage): Partial<CustomerFormState> {
+  const fromEmail = msg.fromEmail?.trim() ?? "";
+  const bodySource = msg.body || msg.summary || msg.preview || "";
+  const nameFromBody = extractNameFromBody(bodySource);
+  const companyFromBody = extractCompany(bodySource, fromEmail);
+  const phoneFromBody = extractPhoneFromBody(bodySource);
+  const contactName =
+    nameFromBody ||
+    msg.contact?.name?.trim() ||
+    (() => {
+      const local = fromEmail.split("@")[0] ?? "";
+      return local ? toTitleCase(local.replace(/[._]/g, " ")) : "";
+    })();
+  const subject = msg.subject?.trim() ?? "";
+  const rawPreview = (msg.summary || msg.preview || msg.body || "").trim();
+  const bodyPreview = rawPreview
+    ? `${rawPreview.replace(/\s+/g, " ").slice(0, 240)}${rawPreview.length > 240 ? "…" : ""}`
+    : "";
+  const customerName = companyFromBody || contactName || "Privatperson";
+  return {
+    name: customerName,
+    contactName,
+    contactEmail: fromEmail,
+    contactChannel: "email",
+    preferredChannel: "email",
+    nextStep: bodyPreview || subject || "Neue Anfrage aus E-Mail",
+    nextStepDueAt: "",
+    tags: "",
+    ownerName: "",
+    region: "",
+    decisionStage: "",
+    contactRole: "",
+    contactId: "",
+    contactPhone: phoneFromBody,
+    mrr: "",
+    segment: "SCALE",
+    health: "GOOD",
+    lastContactAt: msg.receivedAt ?? msg.createdAt,
+  };
+}
 
 
 export default function MessagesWorkspacePage() {
@@ -120,6 +232,8 @@ export default function MessagesWorkspacePage() {
   const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(new Set());
   const [bulkFolderTarget, setBulkFolderTarget] = useState("");
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerPrefill, setCustomerPrefill] = useState<Partial<CustomerFormState> | null>(null);
 
   const unassignedRef = useRef<CustomerMessage[]>([]);
   const inboxRef = useRef<CustomerMessage[]>([]);
@@ -1014,6 +1128,37 @@ export default function MessagesWorkspacePage() {
     }
   }, [applyUnreadSummary, authorizedRequest, clearSelection, folders, persistFolders, selectedBulkIds, selectedId]);
 
+  const handleSingleMoveToTrash = useCallback(
+    async (message: CustomerMessage) => {
+      try {
+        await authorizedRequest("/messages/trash", {
+          method: "POST",
+          body: JSON.stringify({ ids: [message.id] }),
+        });
+        setInboxMessages((prev) => prev.filter((m) => m.id !== message.id));
+        setUnassignedMessages((prev) => prev.filter((m) => m.id !== message.id));
+        setSpamMessages((prev) => prev.filter((m) => m.id !== message.id));
+        setTrashMessages((prev) => [{ ...message, deletedAt: new Date().toISOString() }, ...prev]);
+        if (selectedId === message.id) {
+          setSelectedId(null);
+          setThreadMessages([]);
+        }
+      } catch (err) {
+        console.error("Papierkorb (einzeln) fehlgeschlagen", err);
+      }
+    },
+    [authorizedRequest, selectedId],
+  );
+
+  const handleExtractContact = useCallback(
+    (message: CustomerMessage) => {
+      const prefill = prefillFromMessage(message);
+      setCustomerPrefill(prefill);
+      setShowCustomerModal(true);
+    },
+    [],
+  );
+
   const handleBulkMoveToFolder = useCallback(() => {
     const ids = Array.from(selectedBulkIds);
     const target = bulkFolderTarget.trim();
@@ -1035,6 +1180,77 @@ export default function MessagesWorkspacePage() {
       return nextFolders;
     });
   }, [bulkFolderTarget, inboxMessages, persistFolders, selectedBulkIds, spamMessages, unassignedMessages]);
+
+  const handleBulkRestoreFromTrash = useCallback(async () => {
+    const ids = Array.from(selectedBulkIds);
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    const toRestore = trashRef.current.filter((msg) => idSet.has(msg.id));
+    if (!toRestore.length) return;
+    setBulkProcessing(true);
+    try {
+      await authorizedRequest("/messages/trash/restore", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      });
+      const restored = toRestore.map((msg) => ({ ...msg, deletedAt: null }));
+      setTrashMessages((prev) => prev.filter((msg) => !idSet.has(msg.id)));
+
+      setSpamMessages((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]));
+        restored
+          .filter((m) => m.isSpam)
+          .forEach((m) => map.set(m.id, m));
+        return Array.from(map.values());
+      });
+      setInboxMessages((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]));
+        restored
+          .filter((m) => !m.isSpam)
+          .forEach((m) => map.set(m.id, m));
+        return Array.from(map.values());
+      });
+      setUnassignedMessages((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]));
+        restored
+          .filter((m) => !m.isSpam && !m.customerId && !m.leadId && m.direction === "INBOUND")
+          .forEach((m) => map.set(m.id, m));
+        return Array.from(map.values());
+      });
+
+      applyUnreadSummary((prev) => {
+        let total = prev.total;
+        let unassigned = prev.unassigned;
+        const leads = { ...prev.leads };
+        restored.forEach((msg) => {
+          if (msg.direction === "INBOUND" && !msg.readAt) {
+            total += 1;
+            if (msg.leadId) {
+              leads[msg.leadId] = (leads[msg.leadId] ?? 0) + 1;
+            } else if (!msg.customerId) {
+              unassigned += 1;
+            }
+          }
+        });
+        return { ...prev, total, unassigned, leads };
+      });
+
+      if (selectedId) {
+        const normalized = selectedId.startsWith("message-")
+          ? selectedId.replace("message-", "")
+          : selectedId;
+        if (idSet.has(normalized)) {
+          setSelectedId(null);
+          setThreadMessages([]);
+        }
+      }
+      clearSelection();
+    } catch (err) {
+      console.error("Wiederherstellen fehlgeschlagen", err);
+    } finally {
+      setBulkProcessing(false);
+    }
+  }, [applyUnreadSummary, authorizedRequest, clearSelection, selectedBulkIds, selectedId]);
 
   const isFolderMailbox = activeMailbox.startsWith("folder:");
   const activeFolder = isFolderMailbox ? activeMailbox.replace("folder:", "") : null;
@@ -1144,7 +1360,29 @@ export default function MessagesWorkspacePage() {
       onToggle: selectable ? () => toggleSelectItem(item) : undefined,
     });
   };
-  const renderCustomerItem = (item: Customer, isActive: boolean, _selection?: unknown) => ( <div className={clsx("w-full rounded-2xl border px-4 py-3 text-left", isActive ? "border-white/30 bg-white/10" : "border-white/10 text-slate-300 hover:border-white/20")}> <p className="font-semibold text-white">{item.name}</p> <p className="text-xs text-slate-400">{item.segment}</p> </div> );
+  const renderCustomerItem = (item: Customer, isActive: boolean, _selection?: unknown) => {
+    const primaryContact = item.contacts?.find((contact) => contact.email?.trim()) ?? item.contacts?.[0];
+    const email = primaryContact?.email?.trim() || "Keine E-Mail hinterlegt";
+    const responsible =
+      item.ownerName?.trim() || primaryContact?.name?.trim() || "Keine verantwortliche Person";
+
+    return (
+      <div
+        className={clsx(
+          "w-full rounded-2xl border px-4 py-3 text-left",
+          isActive ? "border-white/30 bg-white/10" : "border-white/10 text-slate-300 hover:border-white/20",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-sm font-semibold text-white">{item.name}</p>
+            <p className="truncate text-xs text-slate-300">E-Mail: {email}</p>
+            <p className="truncate text-xs text-slate-300">Verantwortlich: {responsible}</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
   const renderLeadItem = (item: Lead, isActive: boolean, _selection?: unknown) => {
     const unreadCount = unreadSummary.leads[item.id] ?? 0;
     const isUnreadLead = unreadCount > 0;
@@ -1208,7 +1446,7 @@ export default function MessagesWorkspacePage() {
               selectionState.onToggle?.();
             }}
             className={clsx(
-              "absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border text-slate-100 transition",
+              "absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border text-slate-100 transition",
               selectionState.isSelected
                 ? "border-emerald-400/60 bg-emerald-500/20"
                 : "border-white/10 bg-white/5 hover:border-white/30",
@@ -1315,8 +1553,26 @@ export default function MessagesWorkspacePage() {
     );
   };
 
-  const renderTrashItem = (item: CustomerMessage, isActive: boolean, _selection?: unknown) => {
-    return renderUnassignedItem(item, isActive);
+  const renderTrashItem = (
+    item: CustomerMessage,
+    isActive: boolean,
+    selection?: { selectable: boolean; selected: boolean; selectionActive: boolean },
+  ) => {
+    return renderUnassignedItem(item, isActive, {
+      isSelected: Boolean(selection?.selected),
+      selectionActive: Boolean(selection?.selectionActive),
+      onToggle: selection?.selectable
+        ? () => {
+            const id = item.id;
+            setSelectedBulkIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }
+        : undefined,
+    });
   };
 
   type RenderFn = (
@@ -1330,7 +1586,7 @@ export default function MessagesWorkspacePage() {
     customers: (item, isActive) => renderCustomerItem(item as Customer, isActive),
     sent: (item, isActive) => renderSentItem(item as CustomerMessage, isActive),
     spam: (item, isActive) => renderSpamItem(item as CustomerMessage, isActive),
-    trash: (item, isActive) => renderTrashItem(item as CustomerMessage, isActive),
+    trash: (item, isActive, selection) => renderTrashItem(item as CustomerMessage, isActive, selection),
   };
   if (isFolderMailbox) {
     renderMap[activeMailbox] = (item, isActive, selection) =>
@@ -1399,70 +1655,124 @@ export default function MessagesWorkspacePage() {
           getId: (item: ListItem) => getSelectionId(item as InboxItem),
           toggle: (item: ListItem) => toggleSelectItem(item as InboxItem),
         }
+      : activeMailbox === "trash"
+      ? {
+          enabled: true,
+          active: selectionMode,
+          selected: selectedBulkIds,
+          canSelect: () => true,
+          getId: (item: ListItem) => ("id" in item ? (item as CustomerMessage).id : ""),
+          toggle: (item: ListItem) => {
+            const id = "id" in item ? (item as CustomerMessage).id : "";
+            if (!id) return;
+            setSelectedBulkIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          },
+        }
       : undefined;
 
   const selectionActions =
     activeMailbox === "inbox" || isFolderMailbox
-      ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] px-3 py-2 text-sm shadow-[var(--panel-shadow)]">
+      ? !selectionMode
+        ? (
             <Button
-              variant={selectionMode ? "secondary" : "ghost"}
+              variant="outline"
               size="sm"
-              onClick={() => {
-                if (selectionMode) {
-                  clearSelection();
-                } else {
-                  setSelectionMode(true);
-                }
-              }}
+              onClick={() => setSelectionMode(true)}
+              className="gap-2 rounded-full border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] text-[var(--text-primary)] hover:border-[color:var(--panel-border-strong)]"
             >
-              {selectionMode ? (
-                <span className="flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4" /> Auswahl beenden
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Square className="h-4 w-4" /> Auswählen
-                </span>
-              )}
+              <Square className="h-4 w-4" /> Auswählen
             </Button>
-            {selectionMode && (
-              <>
-                <span className="text-xs text-[var(--text-secondary)]">{selectedBulkIds.size} ausgewählt</span>
+          )
+        : (
+            <div className="relative inline-flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm shadow-[var(--panel-shadow)]">
+              <button
+                type="button"
+                aria-label="Auswahl beenden"
+                onClick={() => clearSelection()}
+                className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-slate-900/80 text-slate-200 shadow"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                  {selectedBulkIds.size} ausgewählt
+                </span>
+                <select
+                  value={bulkFolderTarget}
+                  onChange={(e) => setBulkFolderTarget(e.target.value)}
+                  className="h-9 rounded-full border border-white/10 bg-slate-900/80 px-3 text-sm text-[var(--text-primary)] outline-none"
+                >
+                  <option value="">Ordner wählen</option>
+                  {folders.map((folder) => (
+                    <option key={folder} value={folder}>
+                      {folder}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
+                  disabled={!selectedBulkIds.size || !bulkFolderTarget}
+                  onClick={() => handleBulkMoveToFolder()}
+                  className="gap-2 rounded-full border border-white/10 bg-white/5 text-white hover:border-white/20"
+                >
+                  <Folder className="h-4 w-4" /> In Ordner
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
                   disabled={!selectedBulkIds.size || bulkProcessing}
                   onClick={() => void handleBulkMoveToTrash()}
+                  className="gap-2 rounded-full border border-white/10 bg-white/5 text-white hover:border-white/20"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" /> In Papierkorb
+                  <Trash2 className="h-4 w-4" /> Papierkorb
                 </Button>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={bulkFolderTarget}
-                    onChange={(e) => setBulkFolderTarget(e.target.value)}
-                    className="h-9 rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--panel-border)] px-3 text-sm text-[var(--text-primary)] outline-none"
-                  >
-                    <option value="">Ordner wählen</option>
-                    {folders.map((folder) => (
-                      <option key={folder} value={folder}>
-                        {folder}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!selectedBulkIds.size || !bulkFolderTarget}
-                    onClick={() => handleBulkMoveToFolder()}
-                  >
-                    <Folder className="mr-2 h-4 w-4" /> In Ordner
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        )
+              </div>
+            </div>
+          )
+      : activeMailbox === "trash"
+      ? !selectionMode
+        ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectionMode(true)}
+              className="gap-2 rounded-full border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] text-[var(--text-primary)] hover:border-[color:var(--panel-border-strong)]"
+            >
+              <Square className="h-4 w-4" /> Auswählen
+            </Button>
+          )
+        : (
+            <div className="relative inline-flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm shadow-[var(--panel-shadow)]">
+              <button
+                type="button"
+                aria-label="Auswahl beenden"
+                onClick={() => clearSelection()}
+                className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-slate-900/80 text-slate-200 shadow"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-300">
+                  {selectedBulkIds.size} ausgewählt
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!selectedBulkIds.size || bulkProcessing}
+                  onClick={() => void handleBulkRestoreFromTrash()}
+                  className="gap-2 rounded-full border border-white/10 bg-white/5 text-white hover:border-white/20"
+                >
+                  <RotateCcw className="h-4 w-4" /> Wiederherstellen
+                </Button>
+              </div>
+            </div>
+          )
       : null;
 
   return (
@@ -1553,6 +1863,8 @@ export default function MessagesWorkspacePage() {
                       }}
                       onReply={(message) => { setMessageToReplyTo(message); setIsComposerOpen(true); if (typeof window !== "undefined") window.localStorage.setItem(COMPOSER_OPEN_KEY, "1"); }}
                       onMoveToFolder={(message, folder) => handleMoveToFolder(message, folder)}
+                      onMoveToTrash={(message) => handleSingleMoveToTrash(message)}
+                      onExtractContact={(message) => handleExtractContact(message)}
                       folders={folders}
                       title={resolvedTitle}
                       description={"Details zur Konversation"}
@@ -1576,6 +1888,21 @@ export default function MessagesWorkspacePage() {
         smtpReady={smtpReady}
         smtpStatus={smtpStatus}
         contactSuggestions={contactSuggestions}
+      />
+      <CustomerModal
+        mode="create"
+        open={showCustomerModal}
+        prefill={customerPrefill}
+        onClose={() => { setShowCustomerModal(false); setCustomerPrefill(null); }}
+        onSaved={(customer) => {
+          setShowCustomerModal(false);
+          setCustomerPrefill(null);
+          setCustomers((prev) => {
+            const map = new Map(prev.map((c) => [c.id, c]));
+            map.set(customer.id, customer);
+            return Array.from(map.values());
+          });
+        }}
       />
     </section>
   );

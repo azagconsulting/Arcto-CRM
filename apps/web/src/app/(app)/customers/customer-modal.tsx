@@ -16,11 +16,12 @@ interface CustomerModalProps {
   mode: CustomerModalMode;
   open: boolean;
   customer?: Customer | null;
+  prefill?: Partial<CustomerFormState> | null;
   onClose: () => void;
   onSaved: (customer: Customer) => void;
 }
 
-type CustomerFormState = {
+export type CustomerFormState = {
   name: string;
   ownerName: string;
   region: string;
@@ -114,7 +115,7 @@ function customerToFormState(customer: Customer): CustomerFormState {
   };
 }
 
-export function CustomerModal({ mode, open, customer, onClose, onSaved }: CustomerModalProps) {
+export function CustomerModal({ mode, open, customer, prefill, onClose, onSaved }: CustomerModalProps) {
   const { authorizedRequest } = useAuth();
   const [form, setForm] = useState<CustomerFormState>(initialState);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -133,11 +134,11 @@ export function CustomerModal({ mode, open, customer, onClose, onSaved }: Custom
     if (isEditMode && customer) {
       setForm(customerToFormState(customer));
     } else {
-      setForm(initialState);
+      setForm({ ...initialState, ...(prefill ?? {}) });
     }
     setErrors({});
     setSubmitError(null);
-  }, [open, mode, isEditMode, customer]);
+  }, [open, mode, isEditMode, customer, prefill]);
 
   useEffect(() => {
     if (!open) {

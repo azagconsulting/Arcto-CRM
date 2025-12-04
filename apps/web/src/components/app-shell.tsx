@@ -291,14 +291,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           background: "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)",
         }}
       >
-        <div className={clsx("relative flex items-center justify-between gap-3", sidebarCollapsed && "flex-col")}>
-          {!sidebarCollapsed && <Logo className="text-[var(--text-primary)]" href="/dashboard" label={workspaceDisplayName} />}
-          {sidebarCollapsed && (
-            <div className="relative flex flex-col items-center gap-2">
-              <Logo className="text-[var(--text-primary)]" href="/dashboard" size={40} showText={false} />
-            </div>
-          )}
-          <div className={clsx("flex items-center gap-2", sidebarCollapsed && "w-full justify-end")}>
+        <div className="relative space-y-4">
+          <div className="flex items-center justify-end gap-2">
             {!sidebarCollapsed && (
               <Button
                 size="icon"
@@ -319,6 +313,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <X className="h-5 w-5" />
             </Button>
+          </div>
+          <div
+            className={clsx(
+              "flex flex-col items-center text-center",
+              sidebarCollapsed ? "gap-2" : "gap-4",
+            )}
+          >
+            {!sidebarCollapsed ? (
+              <Logo
+                className="flex-col items-center text-center gap-3 text-[var(--text-primary)]"
+                href="/dashboard"
+                label={workspaceDisplayName}
+              />
+            ) : (
+              <Logo className="text-[var(--text-primary)]" href="/dashboard" size={40} showText={false} />
+            )}
           </div>
         </div>
         <nav className="mt-10 space-y-1 relative z-[210] overflow-visible">

@@ -61,6 +61,11 @@ export class MessagesController {
     return this.messagesService.moveMessagesToTrash(dto.ids);
   }
 
+  @Post('trash/restore')
+  restoreFromTrash(@Body() dto: MarkMessagesTrashDto) {
+    return this.messagesService.restoreMessagesFromTrash(dto.ids);
+  }
+
   @Get('unread-summary')
   unreadSummary() {
     return this.messagesService.getUnreadSummary();
